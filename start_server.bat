@@ -1,0 +1,3 @@
+@echo off
+echo Starting Hexgrid Evolution local server...
+python start_server.py 

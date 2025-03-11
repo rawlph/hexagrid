@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Evolution System Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            padding: 20px;
+        }
+        .test-button {
+            padding: 10px 15px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        #output {
+            margin-top: 20px;
+            padding: 10px;
+            border: 1px solid #ddd;
+            background-color: #f9f9f9;
+            min-height: 200px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Evolution System Test</h1>
+    
+    <button class="test-button" onclick="initTest()">Initialize</button>
+    <button class="test-button" onclick="addPoints()">Add Points</button>
+    <button class="test-button" onclick="unlockTrait()">Unlock Trait</button>
+    
+    <div id="output"></div>
+    
+    <script>
+        // Simple event system
+        const eventSystem = {
+            events: {},
+            on: function(event, callback) {
+                if (!this.events[event]) {
+                    this.events[event] = [];
+                }
+                this.events[event].push(callback);
+            },
+            emit: function(event, data) {
+                log(`Event emitted: ${event}`);
+                if (this.events[event]) {
+                    this.events[event].forEach(callback => {
+                        callback(data);
+                    });
+                }
+            }
+        };
+        
+        // Trait definition
+        class TraitDefinition {
+            constructor(config) {
+                this.id = config.id;
+                this.name = config.name;
+                this.description = config.description;
+                this.category = config.category;
+                this.effects = config.effects || [];
+            }
+        }
+        
+        // Simple trait system
+        const traitSystem = {
+            traits: [
+                new TraitDefinition({
+                    id: 'efficient_movement',
+                    name: 'Efficient Movement',
+                    description: 'Reduces energy cost of movement by 20%',
+                    category: 'flow',
+                    effects: [
+                        { type: 'action_cost_reduction', target: 'move', value: 0.2 }
+                    ]
+                }),
+                new TraitDefinition({
+                    id: 'enhanced_perception',
+                    name: 'Enhanced Perception',
+                    description: 'Reduces energy cost of sensing by 30%',
+                    category: 'flow',
+                    effects: [
+                        { type: 'action_cost_reduction', target: 'sense', value: 0.3 }
+                    ]
+                })
+            ],
+            
+            getTraitById: function(id) {
+                return this.traits.find(trait => trait.id === id);
+            }
+        };
+        
+        // Simple evolution system
+        const evolutionSystem = {
+            metrics: {
+                chaos: 0,
+                order: 0,
+                flow: 0,
+                total: 0
+            },
+            
+            init: function() {
+                log("Evolution system initialized");
+            },
+            
+            addPoints: function(chaos, order, flow) {
+                this.metrics.chaos += chaos;
+                this.metrics.order += order;
+                this.metrics.flow += flow;
+                this.metrics.total += chaos + order + flow;
+                
+                eventSystem.emit('evolutionPointsChanged', { ...this.metrics });
+                log(`Points added - Chaos: ${chaos}, Order: ${order}, Flow: ${flow}`);
+                log(`Total points: ${this.metrics.total}`);
+            },
+            
+            spendPoints: function(amount) {
+                if (this.metrics.total < amount) {
+                    log(`Not enough points! Have ${this.metrics.total}, need ${amount}`);
+                    return false;
+                }
+                
+                this.metrics.total -= amount;
+                eventSystem.emit('evolutionPointsChanged', { ...this.metrics });
+                log(`Spent ${amount} points. Remaining: ${this.metrics.total}`);
+                return true;
+            },
+            
+            getMetrics: function() {
+                return { ...this.metrics };
+            }
+        };
+        
+        // Simple player component
+        const player = {
+            traits: [],
+            
+            addTrait: function(trait) {
+                if (!this.hasTrait(trait.id)) {
+                    this.traits.push(trait);
+                    log(`Added trait: ${trait.name}`);
+                    return true;
+                }
+                log(`Already has trait: ${trait.name}`);
+                return false;
+            },
+            
+            hasTrait: function(traitId) {
+                return this.traits.some(t => t.id === traitId);
+            },
+            
+            getTraitEffectValue: function(effectName) {
+                let total = 0;
+                this.traits.forEach(trait => {
+                    trait.effects.forEach(effect => {
+                        if (effect.target === effectName) {
+                            total += effect.value;
+                        }
+                    });
+                });
+                return total;
+            }
+        };
+        
+        // Output log function
+        function log(message) {
+            const output = document.getElementById('output');
+            output.innerHTML += `<div>${message}</div>`;
+            console.log(message);
+        }
+        
+        // Test functions
+        function initTest() {
+            log("==== INITIALIZING TEST ====");
+            evolutionSystem.init();
+            log("Test initialized successfully");
+        }
+        
+        function addPoints() {
+            log("==== ADDING POINTS ====");
+            evolutionSystem.addPoints(5, 3, 2);
+            log("Current metrics: " + JSON.stringify(evolutionSystem.getMetrics()));
+        }
+        
+        function unlockTrait() {
+            log("==== UNLOCKING TRAIT ====");
+            const trait = traitSystem.getTraitById('efficient_movement');
+            
+            if (!trait) {
+                log("Trait not found!");
+                return;
+            }
+            
+            // Ensure enough points
+            if (evolutionSystem.getMetrics().total < 3) {
+                log("Not enough points, adding more...");
+                evolutionSystem.addPoints(5, 5, 5);
+            }
+            
+            // Purchase trait
+            if (evolutionSystem.spendPoints(3)) {
+                player.addTrait(trait);
+                eventSystem.emit('traitPurchased', { trait, player });
+                log("Trait unlocked successfully!");
+            }
+        }
+        
+        // Initialize on load
+        window.onload = function() {
+            log("Test page loaded. Click 'Initialize' to begin testing.");
+        };
+    </script>
+</body>
+</html>

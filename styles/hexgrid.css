@@ -1,0 +1,247 @@
+/* 
+ * Hexgrid Evolution - Hexgrid Styles
+ * Styling for hex grid and tiles
+ */
+
+.hex-grid {
+    position: absolute;
+    overflow: visible;
+    z-index: 2; /* Above the grid-container background effects */
+}
+
+/* Individual hex tile */
+.hex-tile {
+    position: absolute;
+    width: 70px;
+    height: 80px; /* Height should be width * 1.1547 (2/sqrt(3)) for proper pointy-top hexagon */
+    clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%);
+    transition: transform 0.25s cubic-bezier(0.15, 1.2, 0.3, 1), filter 0.3s ease;
+    --tile-background-color: #0a3442;
+    background-color: var(--tile-background-color);
+    cursor: pointer;
+    box-sizing: border-box; /* Ensure border doesn't add to dimensions */
+    box-shadow: 0 0 10px rgba(1, 10, 15, 0.5);
+}
+
+.hex-tile:hover {
+    transform: scale(1.1);
+    z-index: 10;
+    filter: brightness(1.3);
+}
+
+/* Tile content positioning */
+.hex-tile-content {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    width: 100%;
+    text-align: center;
+    color: var(--light-color);
+    pointer-events: none;
+}
+
+/* Tile coordinates */
+.hex-coordinates {
+    position: absolute;
+    bottom: 5px;
+    font-size: 0.6rem;
+    opacity: 0.5;
+}
+
+/* Tile icon */
+.hex-icon {
+    font-size: 1.5rem;
+    margin-bottom: 0.3rem;
+}
+
+/* Tile types with deep-sea biology theme */
+.hex-tile.normal {
+    --tile-background-color: #0a3442; /* Deep sea blue */
+    background-image: 
+        radial-gradient(circle at center, rgba(20, 70, 90, 0.8) 0%, transparent 100%);
+}
+
+.hex-tile.obstacle {
+    --tile-background-color: #162527; /* Dark sea rock */
+    background-image: 
+        linear-gradient(45deg, rgba(22, 37, 39, 0.9) 25%, rgba(31, 46, 48, 0.9) 25%), 
+        linear-gradient(-45deg, rgba(22, 37, 39, 0.9) 25%, rgba(31, 46, 48, 0.9) 25%);
+    background-size: 20px 20px;
+    box-shadow: 0 0 15px rgba(0, 0, 0, 0.4);
+}
+
+.hex-tile.energy {
+    --tile-background-color: #0d564c; /* Base color for energy tiles */
+    background-image: 
+        radial-gradient(circle at center, rgba(104, 195, 166, 0.4) 0%, transparent 70%);
+    box-shadow: 0 0 10px rgba(104, 195, 166, 0.2);
+    /* Subtle pulsing glow for energy tiles */
+    animation: energyPulse 3s infinite alternate;
+}
+
+.hex-tile.chaotic {
+    --tile-background-color: #511e29; /* Deeper red for chaotic biology */
+    background-image: 
+        radial-gradient(circle at 30% 70%, rgba(201, 60, 100, 0.3) 0%, transparent 70%),
+        radial-gradient(circle at 70% 30%, rgba(201, 60, 100, 0.2) 0%, transparent 60%);
+    box-shadow: 0 0 10px rgba(201, 60, 100, 0.15);
+}
+
+.hex-tile.orderly {
+    --tile-background-color: #0e3c4e; /* Deep ordered blue */
+    background-image: 
+        linear-gradient(120deg, rgba(42, 111, 142, 0.2) 0%, transparent 50%),
+        linear-gradient(240deg, rgba(42, 111, 142, 0.2) 0%, transparent 50%);
+    box-shadow: 0 0 10px rgba(42, 111, 142, 0.15);
+}
+
+.hex-tile.unexplored {
+    --tile-background-color: #041c26; /* Dark abyss */
+    background-image: 
+        radial-gradient(circle at center, rgba(10, 52, 66, 0.3) 0%, transparent 100%);
+    filter: brightness(0.6) contrast(0.9) blur(1px);
+    box-shadow: 0 0 8px rgba(0, 0, 0, 0.5);
+}
+
+.hex-tile.unexplored:hover {
+    filter: brightness(0.8) contrast(1) blur(0px);
+    box-shadow: 0 0 12px rgba(0, 0, 0, 0.4);
+}
+
+/* Player marker - evolved organism */
+.player-marker {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    background-color: var(--accent-color);
+    background-image: radial-gradient(circle at 70% 30%, rgba(255, 255, 255, 0.4) 0%, transparent 40%);
+    border: 2px solid var(--light-color);
+    z-index: 50;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    font-weight: bold;
+    box-shadow: 0 0 15px rgba(240, 94, 35, 0.4);
+    color: var(--light-color);
+    pointer-events: none; /* Ensure clicks pass through to tiles */
+}
+
+/* Tile states and animations */
+.hex-tile.activated {
+    animation: pulse 2s infinite;
+}
+
+.hex-tile.targeted {
+    border: 2px solid var(--accent-color);
+    box-shadow: 0 0 15px rgba(240, 94, 35, 0.3);
+}
+
+.hex-tile.stabilized {
+    animation: stabilize 2s forwards;
+}
+
+.hex-tile.adjacent {
+    border: 1px dashed rgba(230, 244, 241, 0.4);
+}
+
+.hex-tile.disabled {
+    filter: brightness(0.5) contrast(0.7) grayscale(0.5);
+    cursor: not-allowed;
+}
+
+.hex-tile.disabled:hover {
+    transform: none;
+    filter: brightness(0.5) contrast(0.7) grayscale(0.5);
+}
+
+/* Animations */
+@keyframes pulse {
+    0% {
+        transform: scale(1);
+        filter: brightness(1);
+    }
+    50% {
+        transform: scale(1.05);
+        filter: brightness(1.2);
+        box-shadow: 0 0 20px var(--deep-glow);
+    }
+    100% {
+        transform: scale(1);
+        filter: brightness(1);
+    }
+}
+
+@keyframes stabilize {
+    0% {
+        box-shadow: 0 0 25px rgba(72, 219, 251, 0.3);
+    }
+    100% {
+        box-shadow: 0 0 0 rgba(72, 219, 251, 0);
+    }
+}
+
+@keyframes energyPulse {
+    0% {
+        box-shadow: 0 0 10px rgba(104, 195, 166, 0.2);
+    }
+    100% {
+        box-shadow: 0 0 20px rgba(104, 195, 166, 0.4);
+    }
+}
+
+/* Add subtle particles to some tiles */
+.hex-tile.energy::after,
+.hex-tile.chaotic::after,
+.hex-tile.orderly::after {
+    content: '';
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    top: 0;
+    left: 0;
+    background-image: radial-gradient(circle at 30% 40%, rgba(255, 255, 255, 0.1) 0%, transparent 2%),
+                      radial-gradient(circle at 70% 60%, rgba(255, 255, 255, 0.1) 0%, transparent 2%),
+                      radial-gradient(circle at 40% 80%, rgba(255, 255, 255, 0.05) 0%, transparent 2%),
+                      radial-gradient(circle at 80% 20%, rgba(255, 255, 255, 0.05) 0%, transparent 2%);
+    pointer-events: none;
+}
+
+/* Responsive adjustments */
+@media (max-width: 1200px) {
+    .hex-tile {
+        width: 60px;
+        height: 69px; /* width * 1.1547 */
+    }
+    
+    .player-marker {
+        width: 24px;
+        height: 24px;
+        font-size: 0.8rem;
+    }
+}
+
+@media (max-width: 768px) {
+    .hex-tile {
+        width: 50px;
+        height: 58px; /* width * 1.1547 */
+    }
+    
+    .hex-coordinates {
+        font-size: 0.5rem;
+    }
+    
+    .player-marker {
+        width: 20px;
+        height: 20px;
+        font-size: 0.7rem;
+    }
+} 

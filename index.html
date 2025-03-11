@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
+    <title>Hexgrid Evolution</title>
+    <link rel="stylesheet" href="styles/main.css">
+    <link rel="stylesheet" href="styles/hexgrid.css">
+    <link rel="stylesheet" href="styles/ui.css">
+    <link rel="icon" href="favicon.svg" type="image/svg+xml">
+</head>
+<body>
+    <div id="game-container">
+        <header>
+            <h1>Hexgrid Evolution</h1>
+            <div id="game-controls">
+                <button id="new-game-btn">New Game</button>
+                <button id="settings-btn">Settings</button>
+                <button id="stats-btn">Stats</button>
+            </div>
+        </header>
+        
+        <main>
+            <div id="game-info">
+                <div id="energy-display" class="info-box">
+                    <span class="label">Energy:</span>
+                    <span class="value">10</span>
+                </div>
+                <div id="turn-display" class="info-box">
+                    <span class="label">Turn:</span>
+                    <span class="value">1</span>
+                </div>
+                <div id="balance-display" class="info-box balance-container">
+                    <span class="label">Balance:</span>
+                    <div class="balance-bar-container">
+                        <div class="balance-bar-label chaos-label">Chaos</div>
+                        <div class="balance-bar">
+                            <div class="balance-chaos-fill"></div>
+                            <div class="balance-marker"></div>
+                        </div>
+                        <div class="balance-bar-label order-label">Order</div>
+                    </div>
+                    <div class="balance-values">
+                        <span class="chaos-value">50</span> / <span class="order-value">50</span>
+                    </div>
+                </div>
+                <div id="evolution-points-display" class="info-box evolution-points">
+                    <span class="label">Evolution:</span>
+                    <div class="evolution-values">
+                        <span class="chaos-points">0</span> | 
+                        <span class="flow-points">0</span> | 
+                        <span class="order-points">0</span>
+                    </div>
+                </div>
+            </div>
+            
+            <div id="grid-container">
+                <!-- Grid will be generated here -->
+                <button id="evolve-btn" class="hidden">EVOLVE</button>
+            </div>
+            
+            <div id="action-panel">
+                <button id="move-btn" class="action-btn">Move</button>
+                <button id="sense-btn" class="action-btn">Sense</button>
+                <button id="interact-btn" class="action-btn">Interact</button>
+                <button id="stabilize-btn" class="action-btn">Stabilize</button>
+                <button id="end-turn-btn" class="action-btn end-turn">End Turn</button>
+            </div>
+            
+            <div id="message-log">
+                <h3>Game Log</h3>
+                <div id="message-container"></div>
+            </div>
+        </main>
+        
+        <div id="modal-container" class="hidden">
+            <div id="modal-content">
+                <!-- Modal content will be generated dynamically -->
+                <span class="modal-close">&times;</span>
+            </div>
+        </div>
+    </div>
+    
+    <div id="feedback-message"></div>
+    
+    <!-- Load scripts -->
+    <script type="module" src="scripts/index.js"></script>
+</body>
+</html>

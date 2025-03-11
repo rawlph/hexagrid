@@ -1,0 +1,224 @@
+/* UI CSS for Hexgrid Evolution */
+
+/* Action Panel Styles */
+.action-panel {
+    display: flex;
+    flex-direction: column;
+}
+
+.action-buttons {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.action-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 12px;
+    font-weight: bold;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    font-size: 0.9rem;
+    background-color: rgba(15, 40, 60, 0.8);
+    color: rgba(210, 235, 255, 0.9);
+    position: relative;
+    overflow: hidden;
+    border-radius: 6px;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.3), inset 0 1px 2px rgba(255, 255, 255, 0.1);
+    transition: all 0.3s ease;
+    border: 1px solid rgba(20, 60, 90, 0.6);
+}
+
+.action-btn::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: radial-gradient(circle at center, rgba(100, 200, 255, 0.1) 0%, transparent 80%);
+    opacity: 0;
+    transition: opacity 0.5s ease;
+}
+
+.action-btn:hover {
+    background-color: rgba(20, 50, 75, 0.9);
+    box-shadow: 0 3px 8px rgba(0, 0, 0, 0.4), inset 0 1px 3px rgba(255, 255, 255, 0.2);
+    transform: translateY(-1px);
+}
+
+.action-btn:hover::before {
+    opacity: 1;
+}
+
+.action-btn.active {
+    background-color: rgba(30, 70, 100, 0.9);
+    box-shadow: 0 0 15px rgba(100, 200, 255, 0.4), inset 0 1px 3px rgba(255, 255, 255, 0.3);
+    color: rgba(220, 240, 255, 1);
+    border-color: rgba(100, 180, 255, 0.6);
+}
+
+#move-btn {
+    background: linear-gradient(to bottom, rgba(26, 54, 74, 0.9), rgba(16, 34, 54, 0.9));
+    border-color: rgba(46, 94, 114, 0.6);
+}
+
+#move-btn.active {
+    background: linear-gradient(to bottom, rgba(36, 84, 104, 0.9), rgba(26, 64, 84, 0.9));
+    box-shadow: 0 0 15px rgba(100, 200, 255, 0.4), inset 0 1px 3px rgba(255, 255, 255, 0.3);
+}
+
+#sense-btn {
+    background: linear-gradient(to bottom, rgba(18, 48, 72, 0.9), rgba(8, 28, 52, 0.9));
+    border-color: rgba(38, 88, 112, 0.6);
+}
+
+#sense-btn.active {
+    background: linear-gradient(to bottom, rgba(28, 78, 102, 0.9), rgba(18, 58, 82, 0.9));
+    box-shadow: 0 0 15px rgba(80, 180, 255, 0.4), inset 0 1px 3px rgba(255, 255, 255, 0.3);
+}
+
+#interact-btn {
+    background: linear-gradient(to bottom, rgba(30, 60, 75, 0.9), rgba(20, 40, 55, 0.9));
+    border-color: rgba(50, 100, 115, 0.6);
+}
+
+#interact-btn.active {
+    background: linear-gradient(to bottom, rgba(40, 90, 105, 0.9), rgba(30, 70, 85, 0.9));
+    box-shadow: 0 0 15px rgba(120, 210, 235, 0.4), inset 0 1px 3px rgba(255, 255, 255, 0.3);
+}
+
+#stabilize-btn {
+    background: linear-gradient(to bottom, rgba(24, 45, 68, 0.9), rgba(14, 25, 48, 0.9));
+    border-color: rgba(44, 85, 108, 0.6);
+}
+
+#stabilize-btn.active {
+    background: linear-gradient(to bottom, rgba(34, 75, 98, 0.9), rgba(24, 55, 78, 0.9));
+    box-shadow: 0 0 15px rgba(90, 175, 235, 0.4), inset 0 1px 3px rgba(255, 255, 255, 0.3);
+}
+
+#end-turn-btn {
+    margin-top: 10px;
+    background: linear-gradient(to bottom, rgba(40, 50, 65, 0.9), rgba(25, 30, 45, 0.9));
+    border-color: rgba(60, 70, 95, 0.6);
+    color: rgba(220, 235, 250, 0.9);
+}
+
+#end-turn-btn:hover {
+    background: linear-gradient(to bottom, rgba(50, 60, 75, 0.9), rgba(35, 40, 55, 0.9));
+    box-shadow: 0 3px 8px rgba(0, 0, 0, 0.4), inset 0 1px 3px rgba(255, 255, 255, 0.2);
+}
+
+/* Message Log Styles */
+#log-entries {
+    height: 300px;
+    overflow-y: auto;
+    scrollbar-width: thin;
+}
+
+#log-entries::-webkit-scrollbar {
+    width: 6px;
+}
+
+#log-entries::-webkit-scrollbar-thumb {
+    background-color: var(--secondary-color);
+    border-radius: 3px;
+}
+
+.log-entry {
+    animation: fadeIn 0.3s ease-in;
+}
+
+.log-entry.system {
+    color: var(--secondary-color);
+}
+
+.log-entry.player {
+    color: var(--accent-color);
+}
+
+.log-entry.event {
+    color: var(--energy-color);
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+/* Feedback Message */
+#feedback-message {
+    position: fixed;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    padding: 10px 20px;
+    background-color: rgba(0, 0, 0, 0.7);
+    color: white;
+    border-radius: 4px;
+    font-weight: bold;
+    z-index: 100;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.3s;
+}
+
+#feedback-message.visible {
+    opacity: 1;
+}
+
+/* Stats Display */
+.stats-content {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 15px;
+}
+
+.stat-group {
+    background-color: rgba(0, 0, 0, 0.2);
+    padding: 15px;
+    border-radius: 5px;
+}
+
+.stat-group h3 {
+    margin-bottom: 10px;
+    color: var(--secondary-color);
+}
+
+.stat-item {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 5px;
+    padding-bottom: 5px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.progress-bar {
+    height: 10px;
+    width: 100%;
+    background-color: rgba(0, 0, 0, 0.3);
+    border-radius: 5px;
+    margin-top: 5px;
+    overflow: hidden;
+}
+
+.progress-fill {
+    height: 100%;
+    width: 50%;
+    background-color: var(--secondary-color);
+}
+
+.progress-fill.energy {
+    background-color: var(--energy-color);
+}
+
+.progress-fill.order {
+    background-color: var(--order-color);
+}
+
+.progress-fill.chaos {
+    background-color: var(--chaos-color);
+} 
