@@ -270,18 +270,37 @@ export class Game {
     
     /**
      * End the current turn
+     * @returns {boolean} Whether the turn was successfully ended
      */
     endTurn() {
         console.log('End turn method called');
         
-        // Clear any active action
-        this.setPlayerAction(null);
-        
-        // End the turn in the turn system
-        if (this.turnSystem) {
-            this.turnSystem.endTurn();
-        } else {
-            console.error("Turn system is null");
+        try {
+            // Clear any active action in the game
+            this.setPlayerAction(null);
+            
+            // Get player entity and ensure its action is cleared
+            // This provides an additional safety layer beyond ActionPanel's handling
+            const playerEntity = this.entityManager.getEntitiesByTag('player')[0];
+            if (playerEntity) {
+                const playerComponent = playerEntity.getComponent(PlayerComponent);
+                if (playerComponent) {
+                    // Clear the action
+                    playerComponent.setAction(null);
+                }
+            }
+            
+            // End the turn in the turn system
+            if (this.turnSystem) {
+                this.turnSystem.endTurn();
+                return true;
+            } else {
+                console.error("Turn system is null, cannot end turn");
+                return false;
+            }
+        } catch (error) {
+            console.error("Error ending turn:", error);
+            return false;
         }
     }
     

@@ -185,31 +185,38 @@ export class ActionPanel {
     handleEndTurnClick() {
         console.log("End turn button clicked");
         
-        // Clear current action
+        // Clear current action in the ActionPanel
         this.currentAction = null;
         
-        // Get player entity and clear its action
-        const playerEntity = entityManager.getEntitiesByTag('player')[0];
-        if (playerEntity) {
-            const playerComponent = playerEntity.getComponent(PlayerComponent);
-            if (playerComponent) {
-                playerComponent.setAction(null);
-            }
-        }
+        // Since Game.endTurn() now handles player action clearing, we don't need to duplicate it here
+        // However, we'll update UI and provide feedback to the player
         
-        // Use the injected turn system if available, otherwise fall back to global
+        let turnEnded = false;
+        
+        // Use the proper dependency chain to end the turn
         if (this.turnSystem) {
+            // Direct dependency - best practice
             this.turnSystem.endTurn();
-        } else if (window.game && window.game.turnSystem) {
-            // Legacy support for global reference
-            console.warn('ActionPanel: Using global turnSystem reference. Consider injecting turnSystem directly.');
-            window.game.turnSystem.endTurn();
+            turnEnded = true;
+        } else if (window.game) {
+            // Let Game handle it - preferred fallback as it centralizes logic
+            turnEnded = window.game.endTurn();
         } else {
-            console.error("ActionPanel: Turn system not available. Please inject it during initialization.");
+            // Last resort error case
+            console.error("ActionPanel: Turn system not available and window.game not found.");
             this.showFeedback("Error: Could not end turn. Turn system not found.");
+            return;
         }
         
-        this.showFeedback("Turn ended");
+        // Provide user feedback
+        if (turnEnded) {
+            this.showFeedback("Turn ended");
+            
+            // Make sure buttons are updated
+            this.updateButtonStates();
+        } else {
+            this.showFeedback("Failed to end turn");
+        }
     }
     
     /**

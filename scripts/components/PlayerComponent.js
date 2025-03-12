@@ -419,9 +419,24 @@ export class PlayerComponent {
             delta: this.movementPoints - oldPoints
         });
         
-        // Apply energy recovery
+        // Apply energy recovery - fixed to match documentation (was +2, should be +5)
         const oldEnergy = this.energy;
-        this.energy = Math.min(this.maxEnergy, this.energy + 2);
+        const energyRecovery = 5; // Base recovery amount as per documentation
+        
+        // Check if the player has energy efficiency trait which could modify this
+        let finalRecovery = energyRecovery;
+        if (Array.isArray(this.traits)) {
+            for (const trait of this.traits) {
+                if (trait && trait.id === 'energy_efficiency') {
+                    // Apply energy efficiency bonus if the trait exists
+                    finalRecovery += 2; // Additional energy from trait
+                    console.log('Energy Efficiency trait applied: +2 additional energy');
+                    break;
+                }
+            }
+        }
+        
+        this.energy = Math.min(this.maxEnergy, this.energy + finalRecovery);
         
         // Emit energy changed event if energy changed
         if (this.energy !== oldEnergy) {

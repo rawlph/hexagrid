@@ -66,15 +66,50 @@ export class TurnSystem {
     
     /**
      * Initialize the system
+     * @returns {boolean} Whether initialization was successful
      */
     init() {
-        // Register event listeners
-        this.registerEventListeners();
-        
-        // Start first turn
-        this.startTurn();
-        
-        console.log("Turn system initialized - turn: " + this.turnCount);
+        try {
+            console.log(`Initializing turn system for game stage: ${this.gameStage}`);
+            
+            // Clean up any existing event listeners to prevent duplicates
+            this.cleanupEventListeners();
+            
+            // Register fresh event listeners
+            this.registerEventListeners();
+            
+            // Emit system initialized event
+            eventSystem.emit('turnSystemInitialized', {
+                gameStage: this.gameStage,
+                maxTurns: this.maxTurns,
+                balanceThreshold: this.balanceThreshold,
+                evolutionThreshold: this.evolutionThreshold[this.gameStage]
+            });
+            
+            // Start first turn
+            this.startTurn();
+            
+            console.log(`Turn system initialized - turn: ${this.turnCount}`);
+            return true;
+        } catch (error) {
+            console.error("Failed to initialize turn system:", error);
+            return false;
+        }
+    }
+    
+    /**
+     * Clean up existing event listeners
+     * This prevents duplicate event handling when re-initializing
+     */
+    cleanupEventListeners() {
+        // Remove all existing registered events
+        for (const registration of this._registeredEvents) {
+            if (registration) {
+                eventSystem.off(registration);
+            }
+        }
+        // Reset the array
+        this._registeredEvents = [];
     }
     
     /**
