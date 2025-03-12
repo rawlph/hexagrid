@@ -335,27 +335,32 @@ export class ActionPanel {
         
         // Execute the specific action
         let success = false;
-        let details = '';
+        
+        // Flag to track if feedback was already shown in the action method
+        let feedbackShown = false;
         
         switch (action) {
             case 'move':
                 success = this.executeMoveAction(playerComponent, row, col, energyCost);
-                details = `Moved to (${row}, ${col}). Energy: -${energyCost}`;
+                // Move action doesn't show its own feedback, so we need to do it here
+                if (success) {
+                    this.showFeedback(`Moved to (${row}, ${col}). Energy: -${energyCost}`);
+                    feedbackShown = true;
+                }
                 break;
                 
             case 'sense':
-                success = this.executeSenseAction(playerComponent, tileComponent, row, col, energyCost);
-                details = `Sensed ${tileComponent.type} tile`;
-                break;
-                
             case 'interact':
-                success = this.executeInteractAction(playerComponent, tileComponent, row, col, energyCost);
-                details = `Interacted with tile`;
-                break;
-                
             case 'stabilize':
-                success = this.executeStabilizeAction(playerComponent, tileComponent, row, col, energyCost);
-                details = `Stabilized tile`;
+                // For these actions, feedback is already shown in their respective methods
+                if (action === 'sense') {
+                    success = this.executeSenseAction(playerComponent, tileComponent, row, col, energyCost);
+                } else if (action === 'interact') {
+                    success = this.executeInteractAction(playerComponent, tileComponent, row, col, energyCost);
+                } else if (action === 'stabilize') {
+                    success = this.executeStabilizeAction(playerComponent, tileComponent, row, col, energyCost);
+                }
+                feedbackShown = true;
                 break;
                 
             default:
@@ -363,8 +368,12 @@ export class ActionPanel {
                 return;
         }
         
-        // Provide feedback
-        this.provideActionFeedback(action, success, details);
+        // Only provide general feedback if specific feedback wasn't already shown
+        if (success && !feedbackShown) {
+            this.provideActionFeedback(action, success, `${action} successful`);
+        } else if (!success && !feedbackShown) {
+            this.provideActionFeedback(action, success, `${action} failed`);
+        }
         
         // If action was successful, handle resource changes
         if (success) {
