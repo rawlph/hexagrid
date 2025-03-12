@@ -434,46 +434,45 @@ export class Game {
     }
     
     /**
-     * Show a message about evolution points being awarded
-     * @param {Object} data - Event data
+     * Show evolution points message
+     * @param {object} data - Evolution points data
      */
     showEvolutionPointsMessage(data) {
-        const { pointsAwarded, turnCount } = data;
+        if (!data || !data.pointsAwarded) return;
         
-        // Calculate total points awarded
-        const totalPoints = 
-            (pointsAwarded.chaos || 0) + 
-            (pointsAwarded.flow || 0) + 
-            (pointsAwarded.order || 0);
-            
-        // Always show a turn completed message, possibly with points earned
-        let message = `<span style="color: #e0e0e0;">Turn ${turnCount} completed`;
+        const { chaos = 0, flow = 0, order = 0 } = data.pointsAwarded;
+        const totalPoints = chaos + flow + order;
         
-        // If points were awarded, add them to the message
-        if (totalPoints > 0) {
-            message += `. Evolution points earned:</span> `;
+        if (totalPoints <= 0) return;
+        
+        // Create formatted HTML message for the popup
+        let message = '<span style="color: #64dfdf;">Evolution Points Awarded:</span><br>';
+        
+        if (chaos > 0) {
+            message += `<span style="color: #ff5a5f;">Chaos: +${chaos}</span>`;
             
-            // Add chaos points to message if any were awarded
-            if (pointsAwarded.chaos > 0) {
-                message += `<span style="color: var(--chaos-color);">${pointsAwarded.chaos} Chaos</span> `;
+            if (flow > 0 || order > 0) {
+                message += ' | ';
             }
-            
-            // Add flow points to message if any were awarded
-            if (pointsAwarded.flow > 0) {
-                message += `<span style="color: #64dfdf;">${pointsAwarded.flow} Flow</span> `;
-            }
-            
-            // Add order points to message if any were awarded
-            if (pointsAwarded.order > 0) {
-                message += `<span style="color: var(--order-color);">${pointsAwarded.order} Order</span>`;
-            }
-        } else {
-            // Just close the span if no points were awarded
-            message += `.</span>`;
         }
         
-        // Display message
-        this.showFeedbackMessage(message, 'evolution-points', 3000);
+        if (flow > 0) {
+            message += `<span style="color: #f9c80e;">Flow: +${flow}</span>`;
+            
+            if (order > 0) {
+                message += ' | ';
+            }
+        }
+        
+        if (order > 0) {
+            message += `<span style="color: #44ccff;">Order: +${order}</span>`;
+        }
+        
+        // Only show the popup message - the MessageSystem already logs this to prevent duplicates
+        this.showFeedbackMessage(message, 'evolution-points', 3000, false);
+        
+        // Log to console for debugging
+        console.log('Game.showEvolutionPointsMessage displayed feedback popup');
     }
     
     /**
@@ -592,6 +591,15 @@ export class Game {
      */
     createPlayer() {
         try {
+            // Check if a player entity already exists and remove it
+            const existingPlayers = this.entityManager.getEntitiesByTag('player');
+            if (existingPlayers && existingPlayers.length > 0) {
+                console.warn(`Found ${existingPlayers.length} existing player entities, removing them...`);
+                for (const player of existingPlayers) {
+                    this.entityManager.removeEntity(player);
+                }
+            }
+            
             // Ensure Entity class is available
             if (!window.Entity || !window.PlayerComponent) {
                 throw new Error('Entity or PlayerComponent classes not found');

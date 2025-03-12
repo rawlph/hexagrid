@@ -31,6 +31,9 @@ class MessageSystem {
         // Clear log
         this.clearLog();
         
+        // Clean up any existing event listeners before registering new ones
+        this.destroy();
+        
         // Register event listeners
         this.registerEventListeners();
         
@@ -64,32 +67,36 @@ class MessageSystem {
         // Move actions
         this._registeredEvents.push(
             eventSystem.on('action:complete:move', data => {
-                this.addLogMessage(`Moved to (${data.row}, ${data.col})`, "player");
+                // For move actions, we don't need to log here as the ActionPanel already handles it
+                // with more details like energy cost
             })
         );
         
         // Sense actions
         this._registeredEvents.push(
             eventSystem.on('action:complete:sense', data => {
-                this.addLogMessage(`Sensed tile at (${data.row}, ${data.col})`, "player");
+                // For sense actions, we don't log here as ActionPanel provides more detailed feedback
+                // that includes tile type and chaos levels
             })
         );
         
         // Interact actions
         this._registeredEvents.push(
             eventSystem.on('action:complete:interact', data => {
-                this.addLogMessage(`Interacted with tile at (${data.row}, ${data.col})`, "player");
+                // For interact actions, we don't log here as ActionPanel provides more detailed feedback
+                // about the specific interaction effect
             })
         );
         
         // Stabilize actions
         this._registeredEvents.push(
             eventSystem.on('action:complete:stabilize', data => {
-                this.addLogMessage(`Stabilized tile at (${data.row}, ${data.col})`, "player");
+                // For stabilize actions, we don't log here as ActionPanel provides more detailed feedback
+                // that includes the reduction percentage
             })
         );
         
-        // Tile events
+        // Tile events - keep these as they're not duplicated elsewhere
         this._registeredEvents.push(
             eventSystem.on('tileExplored', data => {
                 this.addLogMessage(`Explored ${data.type} tile at (${data.row}, ${data.col})`, "event");
@@ -106,10 +113,16 @@ class MessageSystem {
             })
         );
         
-        // Game state events
+        // Game state events - keep these as they're not duplicated elsewhere
         this._registeredEvents.push(
             eventSystem.on('turnStart', data => {
                 this.addLogMessage(`Turn ${data.turnCount} started`, "system");
+            })
+        );
+        
+        this._registeredEvents.push(
+            eventSystem.on('turnEnd', data => {
+                this.addLogMessage(`Turn ${data.turnCount} ended`, "system");
             })
         );
         
@@ -128,17 +141,20 @@ class MessageSystem {
         // Evolution events
         this._registeredEvents.push(
             eventSystem.on('evolutionPointsAwarded', data => {
-                // Don't add to message log - Game.js already shows the feedback message
-                // This prevents duplicate notifications for evolution points
-                // Uncomment below if you want to show in log too, but not as a popup
-                /*
-                // Calculate total points awarded
-                const totalPoints = data.pointsAwarded ? 
-                    (data.pointsAwarded.chaos || 0) + 
-                    (data.pointsAwarded.flow || 0) + 
-                    (data.pointsAwarded.order || 0) : 0;
-                this.addLogMessage(`Earned ${totalPoints} evolution points`, "event");
-                */
+                // Add a text-only version to the log
+                if (data.pointsAwarded) {
+                    const { chaos = 0, flow = 0, order = 0 } = data.pointsAwarded;
+                    const totalPoints = chaos + flow + order;
+                    
+                    if (totalPoints > 0) {
+                        let logMessage = `Earned evolution points:`;
+                        if (chaos > 0) logMessage += ` Chaos +${chaos}`;
+                        if (flow > 0) logMessage += ` Flow +${flow}`;
+                        if (order > 0) logMessage += ` Order +${order}`;
+                        
+                        this.addLogMessage(logMessage, "event");
+                    }
+                }
             })
         );
         
@@ -160,6 +176,18 @@ class MessageSystem {
     }
     
     /**
+     * Strip HTML tags from a message
+     * @param {string} html - HTML string to strip
+     * @returns {string} - Plain text string
+     * @private
+     */
+    _stripHtml(html) {
+        // Simple regex to remove HTML tags
+        if (typeof html !== 'string') return html; 
+        return html.replace(/<[^>]*>/g, '');
+    }
+    
+    /**
      * Add a message to the log
      * @param {string} message - The message text
      * @param {string} type - Message type (system, player, event)
@@ -173,8 +201,9 @@ class MessageSystem {
         const now = new Date();
         const timestamp = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
         
-        // Set content
-        logEntry.textContent = `[${timestamp}] ${message}`;
+        // Set content - ensure we strip any HTML tags that might be in the message
+        const plainTextMessage = this._stripHtml(message);
+        logEntry.textContent = `[${timestamp}] ${plainTextMessage}`;
         
         // Add to container
         if (this.logContainer) {
@@ -186,7 +215,7 @@ class MessageSystem {
         
         // Add to history
         this.messageHistory.push({
-            message,
+            message: plainTextMessage,
             type,
             timestamp: Date.now()
         });

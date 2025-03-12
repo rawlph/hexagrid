@@ -193,8 +193,8 @@ export class ActionPanel {
         // Use the proper dependency chain to end the turn
         if (this.turnSystem) {
             // Direct dependency - best practice
+            turnEnded = true; // Assume success when using direct reference
             this.turnSystem.endTurn();
-            turnEnded = true;
         } else if (window.game) {
             // Let Game handle it - preferred fallback as it centralizes logic
             turnEnded = window.game.endTurn();
@@ -205,12 +205,15 @@ export class ActionPanel {
             return;
         }
         
-        // Only provide feedback for failures - successful end turn feedback will come from evolution points message
+        // Only provide feedback for failures - evolution points message will show on success
         if (!turnEnded) {
             this.showFeedback("Failed to end turn", "error", 2000, true);
         }
         
-        // Always update button states
+        // Don't show "Turn ended" feedback - the evolution points awarded message 
+        // and turn start message in the log are sufficient feedback
+        
+        // Update button states
         this.updateButtonStates();
     }
     
@@ -346,7 +349,7 @@ export class ActionPanel {
                 success = this.executeMoveAction(playerComponent, row, col, energyCost);
                 // Move action doesn't show its own feedback, so we need to do it here
                 if (success) {
-                    this.showFeedback(`Moved to (${row}, ${col}). Energy: -${energyCost}`);
+                    this.showFeedback(`Moved to (${row}, ${col}). Energy: -${energyCost}`, "success", 2000, true);
                     feedbackShown = true;
                 }
                 break;
@@ -415,6 +418,8 @@ export class ActionPanel {
                 row: row,
                 col: col
             });
+            
+            // Show feedback - will be handled by the calling method
         }
         
         return success;
@@ -446,7 +451,8 @@ export class ActionPanel {
         const chaosLevel = Math.round(tileComponent.chaos * 100);
         const orderLevel = Math.round(tileComponent.order * 100);
         
-        this.showFeedback(`Sensed ${tileComponent.type} tile: ${tileComponent.getChaosDescription()} (${orderLevel}% order, ${chaosLevel}% chaos)`);
+        // Show feedback and add to log
+        this.showFeedback(`Sensed ${tileComponent.type} tile: ${tileComponent.getChaosDescription()} (${orderLevel}% order, ${chaosLevel}% chaos)`, "success", 2000, true);
         
         // Emit standardized event only (remove legacy event)
         eventSystem.emit('action:complete:sense', {
@@ -485,6 +491,7 @@ export class ActionPanel {
         
         // Random effect
         const rand = Math.random();
+        let feedbackMessage = "";
         
         if (rand < 0.3) {
             // Reduce chaos
@@ -495,7 +502,7 @@ export class ActionPanel {
             // Update system balance
             this.updateSystemBalance(newChaos - oldChaos);
             
-            this.showFeedback(`Interaction reduced chaos slightly`);
+            feedbackMessage = `Interaction reduced chaos slightly`;
         } else if (rand < 0.6) {
             // Increase chaos
             const oldChaos = tileComponent.chaos;
@@ -505,7 +512,7 @@ export class ActionPanel {
             // Update system balance
             this.updateSystemBalance(newChaos - oldChaos);
             
-            this.showFeedback(`Interaction increased chaos slightly`);
+            feedbackMessage = `Interaction increased chaos slightly`;
         } else {
             // Change tile type
             const tileTypes = ['normal', 'forest', 'mountain', 'desert'];
@@ -513,11 +520,14 @@ export class ActionPanel {
             
             if (newType !== tileComponent.type) {
                 tileComponent.changeType(newType);
-                this.showFeedback(`Interaction transformed tile to ${newType}`);
+                feedbackMessage = `Interaction transformed tile to ${newType}`;
             } else {
-                this.showFeedback(`Interaction had no effect on tile type`);
+                feedbackMessage = `Interaction had no effect on tile type`;
             }
         }
+        
+        // Show feedback and add to log
+        this.showFeedback(feedbackMessage, "success", 2000, true);
         
         // Emit standardized event only (remove legacy event)
         eventSystem.emit('action:complete:interact', {

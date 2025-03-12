@@ -87,15 +87,38 @@ export class PlayerComponent {
      * Register event listeners
      */
     registerEventListeners() {
-        // Listen for turn start/end
-        eventSystem.on('turnStart', this.onTurnStart);
-        eventSystem.on('turnEnd', this.onTurnEnd);
+        // Clear existing listeners in case this is called multiple times
+        if (this._registeredEvents) {
+            this.clearEventListeners();
+        }
+        
+        // Initialize array to store registrations
+        this._registeredEvents = [];
+        
+        // Listen for turn start/end - store references for proper cleanup
+        this._registeredEvents.push(eventSystem.on('turnStart', this.onTurnStart));
+        this._registeredEvents.push(eventSystem.on('turnEnd', this.onTurnEnd));
         
         // Listen for window resize to update marker position
+        // Note: This is a DOM event, so we handle it differently
         window.addEventListener('resize', this.updateMarkerPosition);
         
         // Listen for grid changes
-        eventSystem.on('gridInitialized', this.updateMarkerPosition);
+        this._registeredEvents.push(eventSystem.on('gridInitialized', this.updateMarkerPosition));
+    }
+    
+    /**
+     * Clear all registered event listeners
+     */
+    clearEventListeners() {
+        if (Array.isArray(this._registeredEvents)) {
+            for (const registration of this._registeredEvents) {
+                if (registration) {
+                    eventSystem.off(registration);
+                }
+            }
+            this._registeredEvents = [];
+        }
     }
     
     /**
@@ -514,10 +537,10 @@ export class PlayerComponent {
      */
     destroy() {
         // Remove event listeners
-        eventSystem.off('turnStart', this.onTurnStart);
-        eventSystem.off('turnEnd', this.onTurnEnd);
+        this.clearEventListeners();
+        
+        // Remove DOM event listener (handled separately)
         window.removeEventListener('resize', this.updateMarkerPosition);
-        eventSystem.off('gridInitialized', this.updateMarkerPosition);
         
         // Remove marker element
         if (this.markerElement) {
