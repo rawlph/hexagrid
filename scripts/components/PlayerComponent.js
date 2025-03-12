@@ -27,7 +27,7 @@ export class PlayerComponent {
         this.chaosEvolutionPoints = 0;
         this.flowEvolutionPoints = 0;
         this.orderEvolutionPoints = 0;
-        this.traits = [];
+        this.traits = []; // Always initialize as empty array
         
         // Action state
         this.currentAction = null;
@@ -305,8 +305,20 @@ export class PlayerComponent {
      * @returns {boolean} Whether the trait was added
      */
     addTrait(trait) {
+        // Ensure traits is initialized
+        if (!this.traits) {
+            this.traits = [];
+            console.warn('PlayerComponent: traits array was not initialized, creating it now');
+        }
+        
+        // Validate trait object
+        if (!trait || !trait.id) {
+            console.error('PlayerComponent: Cannot add invalid trait without id');
+            return false;
+        }
+        
         // Check if we already have this trait
-        if (this.traits.some(t => t.id === trait.id)) return false;
+        if (this.traits.some(t => t && t.id === trait.id)) return false;
         
         // Add trait
         this.traits.push(trait);
@@ -499,7 +511,14 @@ export class PlayerComponent {
      * This is useful when restoring traits after level transitions
      */
     applyAllTraitEffects() {
-        console.log(`Applying effects from ${this.traits.length} traits...`);
+        console.log(`Applying effects from ${this.traits ? this.traits.length : 0} traits...`);
+        
+        // Ensure traits is initialized
+        if (!this.traits) {
+            this.traits = [];
+            console.warn('PlayerComponent: traits array was not initialized, creating it now');
+            return; // No traits to apply
+        }
         
         // Reset stats to base values
         this.maxEnergy = 10; // Base max energy
@@ -507,6 +526,8 @@ export class PlayerComponent {
         
         // Apply each trait's effects one by one
         for (const trait of this.traits) {
+            if (!trait) continue; // Skip null or undefined traits
+            
             console.log(`Applying effects from trait: ${trait.name} (${trait.id})`);
             
             // Apply immediate effects if any
@@ -570,19 +591,37 @@ export class PlayerComponent {
      * @returns {number} The energy cost or -1 if action is not possible
      */
     getActionCost(action, targetRow, targetCol) {
+        // Validate parameters
+        if (!action) {
+            console.error('PlayerComponent: Cannot calculate cost for undefined action');
+            return -1;
+        }
+        
         // Get target tile
         const tileEntity = entityManager.getEntitiesByTag(`tile_${targetRow}_${targetCol}`)[0];
-        if (!tileEntity) return -1;
+        if (!tileEntity) {
+            console.error(`PlayerComponent: No tile entity found at (${targetRow}, ${targetCol})`);
+            return -1;
+        }
         
         const tileComponent = tileEntity.getComponent(TileComponent);
-        if (!tileComponent) return -1;
+        if (!tileComponent) {
+            console.error(`PlayerComponent: Tile at (${targetRow}, ${targetCol}) has no TileComponent`);
+            return -1;
+        }
         
         // Get base cost from tile
         let cost = tileComponent.getActionCost(action);
         
+        // Ensure traits is initialized
+        if (!this.traits) {
+            this.traits = [];
+            console.warn('PlayerComponent: traits array was not initialized, creating it now');
+        }
+        
         // Apply trait modifiers
         for (const trait of this.traits) {
-            if (trait.modifiesActionCost && typeof trait.modifiesActionCost === 'function') {
+            if (trait && trait.modifiesActionCost && typeof trait.modifiesActionCost === 'function') {
                 cost = trait.modifiesActionCost(action, cost, tileComponent);
             }
         }

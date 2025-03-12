@@ -66,20 +66,51 @@ class MessageSystem {
             })
         );
         
+        // Action events
+        this._registeredEvents.push(
+            eventSystem.on('action:complete:move', data => {
+                this.addLogMessage(`Moved to (${data.row}, ${data.col})`, "player");
+            })
+        );
+        
+        // Legacy event
         this._registeredEvents.push(
             eventSystem.on('senseComplete', data => {
                 this.addLogMessage(`Sensed tile at (${data.row}, ${data.col})`, "player");
             })
         );
         
+        // Standardized event
+        this._registeredEvents.push(
+            eventSystem.on('action:complete:sense', data => {
+                this.addLogMessage(`Sensed tile at (${data.row}, ${data.col})`, "player");
+            })
+        );
+        
+        // Legacy event
         this._registeredEvents.push(
             eventSystem.on('interactComplete', data => {
                 this.addLogMessage(`Interacted with tile at (${data.row}, ${data.col})`, "player");
             })
         );
         
+        // Standardized event
+        this._registeredEvents.push(
+            eventSystem.on('action:complete:interact', data => {
+                this.addLogMessage(`Interacted with tile at (${data.row}, ${data.col})`, "player");
+            })
+        );
+        
+        // Legacy event
         this._registeredEvents.push(
             eventSystem.on('stabilizeComplete', data => {
+                this.addLogMessage(`Stabilized tile at (${data.row}, ${data.col})`, "player");
+            })
+        );
+        
+        // Standardized event
+        this._registeredEvents.push(
+            eventSystem.on('action:complete:stabilize', data => {
                 this.addLogMessage(`Stabilized tile at (${data.row}, ${data.col})`, "player");
             })
         );
@@ -276,4 +307,6 @@ class MessageSystem {
             this.feedbackElement.classList.remove('visible');
         }
     }
-} 
+}
+
+export { MessageSystem }; 

@@ -96,6 +96,7 @@ export class TileComponent {
     
     /**
      * Mark tile as explored
+     * @returns {number|boolean} Energy value if this is an energy tile, false if already explored
      */
     markExplored() {
         if (this.explored) return false;
@@ -109,9 +110,15 @@ export class TileComponent {
     /**
      * Change the tile type
      * @param {string} newType - New tile type
+     * @returns {boolean} True if the type was changed, false if it was already the same type
      */
     changeType(newType) {
-        if (this.type === newType) return;
+        if (!newType) {
+            console.error('TileComponent: Cannot change to undefined type');
+            return false;
+        }
+        
+        if (this.type === newType) return false;
         
         this.type = newType;
         this.initializeByType();
@@ -122,8 +129,14 @@ export class TileComponent {
     /**
      * Update the chaos level of the tile
      * @param {number} chaosDelta - Change in chaos level (-1 to 1)
+     * @returns {number} The actual change in chaos level
      */
     updateChaosLevel(chaosDelta) {
+        if (typeof chaosDelta !== 'number') {
+            console.error('TileComponent: chaosDelta must be a number');
+            return 0;
+        }
+        
         const oldChaos = this.chaos;
         this.chaos = Math.max(0, Math.min(1, this.chaos + chaosDelta));
         this.order = 1 - this.chaos;
@@ -140,6 +153,10 @@ export class TileComponent {
      * @returns {number} Action cost
      */
     getActionCost(action) {
+        if (!action || !this.actionCosts[action]) {
+            console.warn(`TileComponent: Invalid action "${action}" requested, returning default cost of 1`);
+            return 1;
+        }
         return this.actionCosts[action] || 1;
     }
     
@@ -168,5 +185,29 @@ export class TileComponent {
             explored: this.explored,
             energyValue: this.energyValue
         };
+    }
+    
+    /**
+     * Apply a visual effect to the tile
+     * @param {string} effectClass - CSS class for the effect
+     * @returns {boolean} True if the effect was applied, false if the element doesn't exist
+     */
+    applyVisualEffect(effectClass) {
+        if (!this.element) {
+            console.warn('TileComponent: Cannot apply effect - element is not defined');
+            return false;
+        }
+        
+        // Add effect class
+        this.element.classList.add(effectClass);
+        
+        // Remove after animation completes
+        setTimeout(() => {
+            if (this.element) {
+                this.element.classList.remove(effectClass);
+            }
+        }, 1000);
+        
+        return true;
     }
 } 

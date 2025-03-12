@@ -80,7 +80,7 @@ export class MetricsSystem {
             eventSystem.on('tileExplored', this.onTileExplored.bind(this))
         );
         
-        // Actions
+        // Actions - Legacy events
         this._registeredEvents.push(
             eventSystem.on('senseComplete', this.onSenseComplete.bind(this))
         );
@@ -91,6 +91,23 @@ export class MetricsSystem {
         
         this._registeredEvents.push(
             eventSystem.on('stabilizeComplete', this.onStabilizeComplete.bind(this))
+        );
+        
+        // Actions - Standardized events
+        this._registeredEvents.push(
+            eventSystem.on('action:complete:sense', this.onSenseComplete.bind(this))
+        );
+        
+        this._registeredEvents.push(
+            eventSystem.on('action:complete:interact', this.onInteractComplete.bind(this))
+        );
+        
+        this._registeredEvents.push(
+            eventSystem.on('action:complete:stabilize', this.onStabilizeComplete.bind(this))
+        );
+        
+        this._registeredEvents.push(
+            eventSystem.on('action:complete:move', this.onPlayerMoved.bind(this))
         );
         
         // Resource usage

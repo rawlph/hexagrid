@@ -8,9 +8,14 @@ import { entityManager } from './EntityManager.js';
 export class TurnSystem {
     /**
      * Create a new turn system
-     * @param {string} gameStage - Current game stage (early, mid, late)
+     * @param {string} gameStage - Game stage (early, mid, late)
+     * @param {Object} options - Optional dependencies and configuration
+     * @param {Object} options.grid - Grid system to use (optional)
      */
-    constructor(gameStage = 'early') {
+    constructor(gameStage = 'early', options = {}) {
+        // Store dependencies
+        this.grid = options.grid || null;
+        
         // Turn tracking
         this.turnCount = 1;
         this.maxTurns = 30; // Default max turns per level
@@ -53,7 +58,7 @@ export class TurnSystem {
         this.checkEvolutionReady = this.checkEvolutionReady.bind(this);
         
         // Event registration tracking
-        this.registeredEvents = [];
+        this._registeredEvents = [];
         
         // Set balance parameters for current game stage
         this.setGameStageBalance(gameStage);
@@ -302,12 +307,19 @@ export class TurnSystem {
      * @returns {Object} Object with chaos and order properties
      */
     getSystemBalance() {
-        // If game instance exists and has a grid, use its balance
+        // If grid is injected, use its balance
+        if (this.grid) {
+            return this.grid.getSystemBalance();
+        }
+        
+        // If grid is not injected, but available in window.game, use that as fallback
         if (window.game && window.game.grid) {
+            console.warn('TurnSystem: Using global grid reference. Consider injecting grid directly.');
             return window.game.grid.getSystemBalance();
         }
         
         // Fallback to our own values if grid not available
+        console.warn('TurnSystem: Grid not available, using fallback balance values.');
         return {
             chaos: this.startingChaos,
             order: this.startingOrder
@@ -398,19 +410,37 @@ export class TurnSystem {
     
     /**
      * Award evolution points to the player based on current balance
+     * @returns {boolean} Whether points were successfully awarded
      */
     awardEvolutionPoints() {
-        // Get player entity
-        const playerEntity = entityManager.getEntitiesByTag('player')[0];
-        if (!playerEntity) {
-            console.error("Player entity not found");
-            return;
+        // Check if entityManager is available
+        if (!entityManager) {
+            console.error("TurnSystem: EntityManager is not available");
+            return false;
         }
         
-        const playerComponent = playerEntity.getComponent(window.PlayerComponent);
+        // Get player entity
+        const playerEntities = entityManager.getEntitiesByTag('player');
+        if (!playerEntities || playerEntities.length === 0) {
+            console.error("TurnSystem: Player entity not found, cannot award evolution points");
+            return false;
+        }
+        
+        const playerEntity = playerEntities[0];
+        
+        // Try to import PlayerComponent if the window.PlayerComponent is not available
+        const PlayerComponentClass = window.PlayerComponent || 
+            (typeof PlayerComponent !== 'undefined' ? PlayerComponent : null);
+            
+        if (!PlayerComponentClass) {
+            console.error("TurnSystem: PlayerComponent class is not available");
+            return false;
+        }
+        
+        const playerComponent = playerEntity.getComponent(PlayerComponentClass);
         if (!playerComponent) {
-            console.error("Player component not found");
-            return;
+            console.error("TurnSystem: Player entity does not have PlayerComponent attached");
+            return false;
         }
         
         // Calculate points to award
@@ -483,5 +513,13 @@ export class TurnSystem {
         } catch (error) {
             console.warn('Error removing event listeners:', error);
         }
+    }
+    
+    /**
+     * Set the grid system to use
+     * @param {Object} grid - The grid system
+     */
+    setGrid(grid) {
+        this.grid = grid;
     }
 } 

@@ -236,7 +236,7 @@ export class Grid {
     }
     
     /**
-     * Create a tile entity at a position
+     * Create a tile entity for a hex cell
      * @param {number} row - Row position
      * @param {number} col - Column position
      * @param {HTMLElement} hexCell - Hex cell element
@@ -267,8 +267,14 @@ export class Grid {
         // Attach DOM element to component
         tileComponent.element = hexCell;
         
+        // Add a tag for easy lookup by position
+        entity.addTag(`tile_${row}_${col}`);
+        
         // Add entity to entity manager
         entityManager.addEntity(entity);
+        
+        // Store the entity in our tiles array for easy access
+        this.tiles[row][col] = entity;
         
         return entity;
     }

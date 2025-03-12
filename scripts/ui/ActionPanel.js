@@ -7,7 +7,15 @@ import { PlayerComponent } from '../components/PlayerComponent.js';
 import { entityManager } from '../core/EntityManager.js';
 
 export class ActionPanel {
-    constructor() {
+    /**
+     * Create a new ActionPanel
+     * @param {Object} options - Configuration options
+     * @param {Object} options.turnSystem - The turn system to use (optional)
+     */
+    constructor(options = {}) {
+        // Store dependencies
+        this.turnSystem = options.turnSystem || null;
+        
         // Action buttons
         this.buttons = {
             move: document.getElementById('move-btn'),
@@ -33,11 +41,18 @@ export class ActionPanel {
     /**
      * Initialize the action panel
      * @param {MessageSystem} messageSystem - The message system for feedback
+     * @param {Object} options - Additional initialization options
+     * @param {Object} options.turnSystem - The turn system to use (optional)
      */
-    init(messageSystem) {
+    init(messageSystem, options = {}) {
         console.log("Initializing action panel");
         
         this.messageSystem = messageSystem;
+        
+        // Set turn system if provided
+        if (options.turnSystem) {
+            this.turnSystem = options.turnSystem;
+        }
         
         // Set up button listeners
         this.setupButtonListeners();
@@ -174,11 +189,16 @@ export class ActionPanel {
             }
         }
         
-        // Use the global game's turn system to end the turn
-        if (window.game && window.game.turnSystem) {
+        // Use the injected turn system if available, otherwise fall back to global
+        if (this.turnSystem) {
+            this.turnSystem.endTurn();
+        } else if (window.game && window.game.turnSystem) {
+            // Legacy support for global reference
+            console.warn('ActionPanel: Using global turnSystem reference. Consider injecting turnSystem directly.');
             window.game.turnSystem.endTurn();
         } else {
-            console.error("Game or TurnSystem not found");
+            console.error("ActionPanel: Turn system not available. Please inject it during initialization.");
+            this.showFeedback("Error: Could not end turn. Turn system not found.");
         }
         
         this.showFeedback("Turn ended");
@@ -221,6 +241,47 @@ export class ActionPanel {
     }
     
     /**
+     * Check if the player has enough energy for an action
+     * @param {PlayerComponent} playerComponent - The player component
+     * @param {number} energyCost - Energy cost of the action
+     * @returns {boolean} True if the player has enough energy
+     */
+    hasEnoughEnergy(playerComponent, energyCost) {
+        if (playerComponent.energy < energyCost) {
+            this.showFeedback(`Not enough energy! Need ${energyCost}`);
+            return false;
+        }
+        return true;
+    }
+
+    /**
+     * Update system balance
+     * @param {number} chaosDelta - Change in chaos level
+     */
+    updateSystemBalance(chaosDelta) {
+        if (window.game && window.game.grid) {
+            console.warn('ActionPanel: Using global game.grid reference. Consider injecting grid directly.');
+            window.game.grid.updateSystemBalance(chaosDelta / 10); // Reduced effect on whole system
+        } else {
+            console.error("ActionPanel: Grid not available. Could not update system balance.");
+        }
+    }
+
+    /**
+     * Provide feedback for action execution
+     * @param {string} action - The action performed
+     * @param {boolean} success - Whether the action was successful
+     * @param {string} details - Additional details for feedback
+     */
+    provideActionFeedback(action, success, details) {
+        if (success) {
+            this.showFeedback(`${action} successful: ${details}`);
+        } else {
+            this.showFeedback(`${action} failed: ${details}`);
+        }
+    }
+
+    /**
      * Execute an action
      * @param {string} action - The action type
      * @param {number} row - Target row
@@ -261,35 +322,42 @@ export class ActionPanel {
         }
         
         // Check if player has enough energy
-        if (playerComponent.energy < energyCost) {
-            this.showFeedback(`Not enough energy! Need ${energyCost}`);
+        if (!this.hasEnoughEnergy(playerComponent, energyCost)) {
             return;
         }
         
         // Execute the specific action
         let success = false;
+        let details = '';
         
         switch (action) {
             case 'move':
                 success = this.executeMoveAction(playerComponent, row, col, energyCost);
+                details = `Moved to (${row}, ${col}). Energy: -${energyCost}`;
                 break;
                 
             case 'sense':
                 success = this.executeSenseAction(playerComponent, tileComponent, row, col, energyCost);
+                details = `Sensed ${tileComponent.type} tile`;
                 break;
                 
             case 'interact':
                 success = this.executeInteractAction(playerComponent, tileComponent, row, col, energyCost);
+                details = `Interacted with tile`;
                 break;
                 
             case 'stabilize':
                 success = this.executeStabilizeAction(playerComponent, tileComponent, row, col, energyCost);
+                details = `Stabilized tile`;
                 break;
                 
             default:
                 this.showFeedback(`Unknown action: ${action}`);
                 return;
         }
+        
+        // Provide feedback
+        this.provideActionFeedback(action, success, details);
         
         // If action was successful, handle resource changes
         if (success) {
@@ -318,12 +386,17 @@ export class ActionPanel {
      */
     executeMoveAction(playerComponent, row, col, energyCost) {
         // Try to move the player
-        const success = playerComponent.moveTo(row, col);
+        const success = playerComponent.updatePosition(row, col);
         
         if (success) {
-            this.showFeedback(`Moved to (${row}, ${col}). Energy: -${energyCost}`);
-        } else {
-            this.showFeedback("Movement failed");
+            this.updateSystemBalance(0); // No chaos change for move
+            
+            // Emit standardized event
+            eventSystem.emit('action:complete:move', {
+                player: playerComponent,
+                row: row,
+                col: col
+            });
         }
         
         return success;
@@ -342,8 +415,14 @@ export class ActionPanel {
         // Mark tile as explored
         tileComponent.markExplored();
         
-        // Apply visual effect
-        tileComponent.applyEffect('sense-effect');
+        // Apply visual effect using the renamed method
+        if (typeof tileComponent.applyVisualEffect === 'function') {
+            tileComponent.applyVisualEffect('sense-effect');
+        } else if (typeof tileComponent.applyEffect === 'function') {
+            // Backward compatibility for older method name
+            console.warn('ActionPanel: Using deprecated tileComponent.applyEffect method');
+            tileComponent.applyEffect('sense-effect');
+        }
         
         // Show detailed tile information
         const chaosLevel = Math.round(tileComponent.chaos * 100);
@@ -351,7 +430,17 @@ export class ActionPanel {
         
         this.showFeedback(`Sensed ${tileComponent.type} tile: ${tileComponent.getChaosDescription()} (${orderLevel}% order, ${chaosLevel}% chaos)`);
         
-        // Emit event
+        // Emit event with standardized name
+        eventSystem.emit('action:complete:sense', {
+            player: playerComponent,
+            tileComponent: tileComponent,
+            row: row,
+            col: col,
+            chaosLevel: tileComponent.chaos,
+            orderLevel: tileComponent.order
+        });
+        
+        // Legacy event name for backward compatibility
         eventSystem.emit('senseComplete', {
             player: playerComponent,
             tileComponent: tileComponent,
@@ -374,8 +463,14 @@ export class ActionPanel {
      * @returns {boolean} True if successful
      */
     executeInteractAction(playerComponent, tileComponent, row, col, energyCost) {
-        // Apply visual effect
-        tileComponent.applyEffect('interact-effect');
+        // Apply visual effect using the renamed method
+        if (typeof tileComponent.applyVisualEffect === 'function') {
+            tileComponent.applyVisualEffect('interact-effect');
+        } else if (typeof tileComponent.applyEffect === 'function') {
+            // Backward compatibility for older method name
+            console.warn('ActionPanel: Using deprecated tileComponent.applyEffect method');
+            tileComponent.applyEffect('interact-effect');
+        }
         
         // Mark tile as explored
         tileComponent.markExplored();
@@ -390,9 +485,7 @@ export class ActionPanel {
             tileComponent.updateChaosLevel(newChaos - oldChaos);
             
             // Update system balance
-            if (window.game && window.game.grid) {
-                window.game.grid.updateSystemBalance((newChaos - oldChaos) / 10); // Reduced effect on whole system
-            }
+            this.updateSystemBalance(newChaos - oldChaos);
             
             this.showFeedback(`Interaction reduced chaos slightly`);
         } else if (rand < 0.6) {
@@ -402,9 +495,7 @@ export class ActionPanel {
             tileComponent.updateChaosLevel(newChaos - oldChaos);
             
             // Update system balance
-            if (window.game && window.game.grid) {
-                window.game.grid.updateSystemBalance((newChaos - oldChaos) / 10); // Reduced effect on whole system
-            }
+            this.updateSystemBalance(newChaos - oldChaos);
             
             this.showFeedback(`Interaction increased chaos slightly`);
         } else {
@@ -420,7 +511,15 @@ export class ActionPanel {
             }
         }
         
-        // Emit event
+        // Emit event with standardized name
+        eventSystem.emit('action:complete:interact', {
+            player: playerComponent,
+            tileComponent: tileComponent,
+            row: row,
+            col: col
+        });
+        
+        // Legacy event name for backward compatibility
         eventSystem.emit('interactComplete', {
             player: playerComponent,
             tileComponent: tileComponent,
@@ -433,16 +532,28 @@ export class ActionPanel {
     
     /**
      * Execute stabilize action
-     * @param {PlayerComponent} playerComponent - The player component
-     * @param {TileComponent} tileComponent - The tile component
+     * @param {PlayerComponent} playerComponent - Player component
+     * @param {TileComponent} tileComponent - Tile component
      * @param {number} row - Target row
      * @param {number} col - Target column
      * @param {number} energyCost - Energy cost
      * @returns {boolean} True if successful
      */
     executeStabilizeAction(playerComponent, tileComponent, row, col, energyCost) {
-        // Apply visual effect
-        tileComponent.applyEffect('stabilize-effect');
+        // Ensure traits array exists
+        if (!playerComponent.traits) {
+            console.warn('ActionPanel: playerComponent.traits not initialized, creating empty array');
+            playerComponent.traits = [];
+        }
+        
+        // Apply visual effect using the renamed method
+        if (typeof tileComponent.applyVisualEffect === 'function') {
+            tileComponent.applyVisualEffect('stabilize-effect');
+        } else if (typeof tileComponent.applyEffect === 'function') {
+            // Backward compatibility for older method name
+            console.warn('ActionPanel: Using deprecated tileComponent.applyEffect method');
+            tileComponent.applyEffect('stabilize-effect');
+        }
         
         // Mark tile as explored
         tileComponent.markExplored();
@@ -456,8 +567,10 @@ export class ActionPanel {
         // Calculate stabilization amount (stronger for players with the trait)
         let stabilizeAmount = 0.2 + Math.random() * 0.2;
         
-        // Check for powerful stabilizer trait
-        const hasPowerfulStabilizer = playerComponent.traits.some(t => t.id === 'powerful_stabilizer');
+        // Check for powerful stabilizer trait with defensive programming
+        const hasPowerfulStabilizer = Array.isArray(playerComponent.traits) && 
+            playerComponent.traits.some(t => t && t.id === 'powerful_stabilizer');
+            
         if (hasPowerfulStabilizer) {
             stabilizeAmount *= 1.5;
         }
@@ -469,9 +582,7 @@ export class ActionPanel {
         tileComponent.updateChaosLevel(chaosDelta);
         
         // Update system-wide balance
-        if (window.game && window.game.grid) {
-            window.game.grid.updateSystemBalance(chaosDelta / 10); // Reduced effect on whole system
-        }
+        this.updateSystemBalance(chaosDelta);
         
         // Calculate the reduction percentage
         const reductionPct = Math.round((oldChaos - newChaos) * 100);
@@ -483,7 +594,18 @@ export class ActionPanel {
             this.showFeedback(`Stabilized tile, reducing chaos by ${reductionPct}%`);
         }
         
-        // Emit event
+        // Emit event with standardized name
+        eventSystem.emit('action:complete:stabilize', {
+            player: playerComponent,
+            tileComponent: tileComponent,
+            row: row,
+            col: col,
+            oldChaos: oldChaos,
+            newChaos: newChaos,
+            reduction: oldChaos - newChaos
+        });
+        
+        // Legacy event name for backward compatibility
         eventSystem.emit('stabilizeComplete', {
             player: playerComponent,
             tileComponent: tileComponent,
