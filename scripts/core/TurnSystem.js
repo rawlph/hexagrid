@@ -48,6 +48,14 @@ export class TurnSystem {
         // Evolution state
         this.canEvolve = false;
         
+        // Current level evolution points tracking
+        this.currentLevelPoints = {
+            chaos: 0,
+            flow: 0,
+            order: 0,
+            total: 0
+        };
+        
         // Victory tracking
         this.turnsBalanced = 0;
         this.turnsToBalance = 3; // Consecutive balanced turns needed for victory
@@ -481,6 +489,12 @@ export class TurnSystem {
         // Calculate points to award
         const pointsToAward = this.calculateEvolutionPoints();
         
+        // Update current level points tracking
+        this.currentLevelPoints.chaos += pointsToAward.chaos;
+        this.currentLevelPoints.flow += pointsToAward.flow;
+        this.currentLevelPoints.order += pointsToAward.order;
+        this.currentLevelPoints.total += pointsToAward.total;
+        
         // Award the points - suppress individual events to avoid duplicate messages
         if (pointsToAward.chaos > 0) {
             playerComponent.addEvolutionPoints('chaos', pointsToAward.chaos, true); // Suppress event
@@ -502,7 +516,8 @@ export class TurnSystem {
             chaosPoints: playerComponent.chaosEvolutionPoints,
             flowPoints: playerComponent.flowEvolutionPoints,
             orderPoints: playerComponent.orderEvolutionPoints,
-            totalPoints: playerComponent.evolutionPoints
+            totalPoints: playerComponent.evolutionPoints,
+            currentLevelPoints: this.currentLevelPoints
         });
         
         // Then emit evolutionPointsAwarded for the feedback message
@@ -510,10 +525,12 @@ export class TurnSystem {
             turnCount: this.turnCount,
             pointsAwarded: pointsToAward,
             gameStage: this.gameStage,
-            balance: this.getSystemBalance()
+            balance: this.getSystemBalance(),
+            currentLevelPoints: this.currentLevelPoints
         });
         
         console.log(`Evolution points awarded: Chaos=${pointsToAward.chaos}, Flow=${pointsToAward.flow}, Order=${pointsToAward.order}`);
+        console.log(`Current level points: ${JSON.stringify(this.currentLevelPoints)}`);
         
         // Check if player has enough points to evolve
         this.checkEvolutionReady(playerComponent);
@@ -529,9 +546,10 @@ export class TurnSystem {
         // Get the threshold for the current game stage
         const threshold = this.evolutionThreshold[this.gameStage] || 50;
         
-        // Check if total evolution points exceed the threshold
-        const totalPoints = playerComponent.getTotalEvolutionPoints();
-        const canEvolveNow = totalPoints >= threshold;
+        // Check if current level evolution points exceed the threshold
+        // Use currentLevelPoints instead of total accumulated points
+        const currentLevelTotal = this.currentLevelPoints.total;
+        const canEvolveNow = currentLevelTotal >= threshold;
         
         // Only emit event if the state changes
         if (canEvolveNow !== this.canEvolve) {
@@ -540,13 +558,30 @@ export class TurnSystem {
             // Emit evolution ready event
             eventSystem.emit('evolutionReady', {
                 canEvolve: this.canEvolve,
-                totalPoints: totalPoints,
+                currentLevelTotal: currentLevelTotal,
+                totalPoints: playerComponent.getTotalEvolutionPoints(),
                 threshold: threshold,
                 gameStage: this.gameStage
             });
             
             console.log(`Evolution ready state changed: ${this.canEvolve ? 'Ready to evolve!' : 'Not ready yet'}`);
+            console.log(`Current level points: ${currentLevelTotal}/${threshold}, Total accumulated: ${playerComponent.getTotalEvolutionPoints()}`);
         }
+    }
+    
+    /**
+     * Reset current level points tracking
+     * Should be called when starting a new level
+     */
+    resetCurrentLevelPoints() {
+        this.currentLevelPoints = {
+            chaos: 0,
+            flow: 0,
+            order: 0,
+            total: 0
+        };
+        this.canEvolve = false;
+        console.log("Reset current level evolution points");
     }
     
     /**

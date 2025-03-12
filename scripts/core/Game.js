@@ -106,6 +106,9 @@ export class Game {
             // Initialize systems
             if (this.turnSystem && typeof this.turnSystem.init === 'function') {
                 this.turnSystem.init();
+                
+                // Reset current level evolution points
+                this.turnSystem.resetCurrentLevelPoints();
             } else {
                 throw new Error('TurnSystem initialization failed: turnSystem object invalid');
             }
@@ -816,13 +819,15 @@ export class Game {
             
             // Show a message to the player
             this.showFeedbackMessage(
-                `<span style="color: #64dfdf;">Evolution available!</span> You have gathered enough points to evolve.`, 
+                `<span style="color: #64dfdf;">Evolution available!</span> You have gathered enough points in this level to evolve.`, 
                 'success', 
                 4000
             );
             
             // Add message to log
-            this.addLogMessage('You have gathered enough evolution points to evolve!');
+            this.addLogMessage(`You have gathered enough evolution points (${data.currentLevelTotal} in this level) to evolve!`);
+            
+            console.log(`Evolution ready: ${data.currentLevelTotal} points in current level, total accumulated: ${data.totalPoints}`);
         } else {
             // Hide evolve button
             evolveBtn.classList.add('hidden');
@@ -2077,6 +2082,11 @@ export class Game {
         // Restart the game with new settings
         this.init(gridSize, gridSize, data.gameStage);
         
+        // Reset current level evolution points in the TurnSystem
+        if (this.turnSystem) {
+            this.turnSystem.resetCurrentLevelPoints();
+        }
+        
         // Use requestAnimationFrame to ensure player entity is fully initialized before restoring
         requestAnimationFrame(() => {
             // Verify player entity exists
@@ -2085,6 +2095,12 @@ export class Game {
                 console.log('Player entity found, restoring traits and evolution points');
                 // Restore player traits and evolution points
                 this.restorePlayerTraits(playerData);
+                
+                // Make sure the Evolve button is hidden at level start
+                const evolveBtn = document.getElementById('evolve-btn');
+                if (evolveBtn) {
+                    evolveBtn.classList.add('hidden');
+                }
             } else {
                 console.error('Player entity not found when attempting to restore traits');
             }

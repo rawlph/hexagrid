@@ -557,7 +557,7 @@ main {
     position: absolute;
     bottom: 200px; /* Keep the same vertical distance */
     left: 50%; /* Center based on 50% of container width */
-    transform: translateX(-50%) translateX(-300px); /* Center the element and shift 100px to the left */
+    transform: translateX(-50%) translateX(-300px); /* Center the element and shift 300px to the left */
     background-color: var(--dark-color);
     color: var(--light-color);
     padding: 0.75rem 1.5rem;
