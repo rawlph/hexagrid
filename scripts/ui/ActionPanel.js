@@ -164,7 +164,12 @@ export class ActionPanel {
             return;
         }
         
-        // Toggle the action
+        // Toggle the action - clicking the same action button will deselect it
+        // However, after performing an action, it will stay selected until:
+        // 1. Player clicks the action button again to deselect it
+        // 2. Player runs out of movement points
+        // 3. Player doesn't have enough energy for another action
+        // 4. Player ends their turn
         if (playerComponent.currentAction === action) {
             playerComponent.setAction(null);
             this.currentAction = null;
@@ -187,6 +192,15 @@ export class ActionPanel {
         
         // Clear current action in the ActionPanel
         this.currentAction = null;
+        
+        // Also clear it in the PlayerComponent
+        const playerEntity = entityManager.getEntitiesByTag('player')[0];
+        if (playerEntity) {
+            const playerComponent = playerEntity.getComponent(PlayerComponent);
+            if (playerComponent) {
+                playerComponent.setAction(null);
+            }
+        }
         
         let turnEnded = false;
         
@@ -388,9 +402,23 @@ export class ActionPanel {
             // Use movement point
             playerComponent.useMovementPoint();
             
-            // Clear action
-            playerComponent.setAction(null);
-            this.currentAction = null;
+            // We no longer clear the action after successful execution
+            // This allows players to perform the same action multiple times
+            // Instead, check if player can still perform actions
+            
+            // If player has no movement points left, deselect the action
+            if (playerComponent.movementPoints <= 0) {
+                playerComponent.setAction(null);
+                this.currentAction = null;
+                this.showFeedback("No movement points left! Action deselected.", "warning", 2000, true);
+            }
+            
+            // If player doesn't have enough energy for another action, deselect
+            else if (playerComponent.energy < energyCost) {
+                playerComponent.setAction(null);
+                this.currentAction = null;
+                this.showFeedback("Not enough energy for another action! Action deselected.", "warning", 2000, true);
+            }
             
             // Update UI
             this.updateButtonStates();
@@ -688,8 +716,17 @@ export class ActionPanel {
      * @param {object} data - Event data
      */
     onTurnStart(data) {
-        // Reset action selection
+        // Reset action selection in the ActionPanel
         this.currentAction = null;
+        
+        // Also ensure the PlayerComponent's action is reset
+        const playerEntity = entityManager.getEntitiesByTag('player')[0];
+        if (playerEntity) {
+            const playerComponent = playerEntity.getComponent(PlayerComponent);
+            if (playerComponent) {
+                playerComponent.setAction(null);
+            }
+        }
         
         // Update button states
         this.updateButtonStates();
