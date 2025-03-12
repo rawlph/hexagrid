@@ -55,7 +55,15 @@ class MessageSystem {
         // Create new element
         this.feedbackElement = document.createElement('div');
         this.feedbackElement.id = 'feedback-message';
-        document.body.appendChild(this.feedbackElement);
+        
+        // Append to grid container instead of document body
+        const gridContainer = document.getElementById('grid-container');
+        if (gridContainer) {
+            gridContainer.appendChild(this.feedbackElement);
+        } else {
+            // Fallback to body if grid container not found
+            document.body.appendChild(this.feedbackElement);
+        }
     }
     
     /**
@@ -169,7 +177,7 @@ class MessageSystem {
             eventSystem.on('achievementsCompleted', data => {
                 data.achievements.forEach(achievement => {
                     this.addLogMessage(`Achievement unlocked: ${achievement.name}`, "event");
-                    this.showFeedbackMessage(`Achievement: ${achievement.name}`, 3000);
+                    this.showFeedbackMessage(`Achievement: ${achievement.name}`, 3000, 'achievement', 'achievement');
                 });
             })
         );
@@ -231,19 +239,161 @@ class MessageSystem {
      * @param {string} message - The message text
      * @param {number} duration - Display duration in milliseconds
      * @param {string} type - Message type (success, error, warning, evolution-points)
+     * @param {string} category - Optional category to identify similar messages for coalescing
      */
-    showFeedbackMessage(message, duration = 2000, type = '') {
-        // Add to queue
-        this.feedbackQueue.push({
+    showFeedbackMessage(message, duration = 2000, type = '', category = '') {
+        // Add to queue with optional category for message coalescing
+        const newMessage = {
             message,
             duration,
-            type
-        });
+            type,
+            category,
+            timestamp: Date.now()
+        };
+        
+        // If category is provided, look for existing messages of the same category to replace
+        if (category) {
+            const existingIndex = this.feedbackQueue.findIndex(msg => msg.category === category);
+            if (existingIndex >= 0) {
+                // Replace existing message with the new one
+                this.feedbackQueue[existingIndex] = newMessage;
+                
+                // If we're replacing the currently displayed message, immediately update it
+                if (existingIndex === 0 && this.feedbackActive) {
+                    clearTimeout(this._feedbackTimeout);
+                    this.showCurrentMessage(newMessage);
+                }
+                
+                return;
+            }
+        }
+        
+        // Basic queue management - limit queue size to prevent message backlog during fast gameplay
+        const maxQueueSize = 5; // Adjust as needed
+        if (this.feedbackQueue.length >= maxQueueSize) {
+            // Only keep important messages (errors, warnings) and the most recent ones
+            this.feedbackQueue = this.feedbackQueue.filter(msg => 
+                msg.type === 'error' || 
+                msg.type === 'warning' || 
+                msg.type === 'evolution-points' ||
+                (Date.now() - msg.timestamp) < 1000
+            );
+            
+            // If still too many, remove the oldest non-critical ones
+            if (this.feedbackQueue.length >= maxQueueSize) {
+                // Find the oldest non-critical message
+                const oldestIndex = this.feedbackQueue.findIndex(msg => 
+                    msg.type !== 'error' && 
+                    msg.type !== 'warning' && 
+                    msg.type !== 'evolution-points'
+                );
+                
+                if (oldestIndex >= 0) {
+                    this.feedbackQueue.splice(oldestIndex, 1);
+                }
+            }
+        }
+        
+        // Add the new message to the queue
+        this.feedbackQueue.push(newMessage);
         
         // Process queue if not active
         if (!this.feedbackActive) {
             this.processFeedbackQueue();
         }
+    }
+    
+    /**
+     * Display the current message
+     * @param {object} messageData - Message data including message, duration, and type
+     */
+    showCurrentMessage(messageData) {
+        const { message, duration, type, category } = messageData;
+        
+        // Show message
+        if (this.feedbackElement) {
+            // Support HTML content
+            this.feedbackElement.innerHTML = message;
+            
+            // Clear any existing classes first
+            this.feedbackElement.className = '';
+            
+            // Check if we should use compact mode for fast gameplay
+            const isRapidMessage = this.isRapidGameplay();
+            
+            // Add styling classes
+            this.feedbackElement.classList.add('visible');
+            
+            // Add type class if provided
+            if (type) {
+                this.feedbackElement.classList.add(type);
+            }
+            
+            // Add category class if provided (for special styling)
+            if (category) {
+                this.feedbackElement.classList.add(category);
+            }
+            
+            // For rapid gameplay, use compact mode for most messages
+            // Important messages should always be shown in their full format
+            const isImportantMessage = type === 'error' || 
+                                       type === 'evolution-points' || 
+                                       type === 'achievement' || 
+                                       category === 'evolution-points' || 
+                                       category === 'achievement';
+            
+            if (isRapidMessage && !isImportantMessage) {
+                this.feedbackElement.classList.add('compact');
+            }
+            
+            // Set timeout to hide message and process next in queue
+            clearTimeout(this._feedbackTimeout);
+            
+            // Use shorter duration for rapid non-critical messages
+            let actualDuration = duration;
+            if (isRapidMessage && !isImportantMessage) {
+                actualDuration = Math.min(duration, 1200); // Shorter duration during rapid gameplay
+            }
+            
+            this._feedbackTimeout = setTimeout(() => {
+                // Remove the visible class first to trigger fade out
+                this.feedbackElement.classList.remove('visible');
+                
+                // After the transition completes, clear all classes and process the next message
+                setTimeout(() => {
+                    this.feedbackElement.className = '';
+                    this.processFeedbackQueue();
+                }, 300); // Match this to the CSS transition duration
+            }, actualDuration);
+        }
+    }
+    
+    /**
+     * Check if we're in rapid gameplay mode based on message frequency
+     * @returns {boolean} True if messages are being displayed rapidly
+     */
+    isRapidGameplay() {
+        if (!this._lastMessageTime) {
+            this._lastMessageTime = Date.now();
+            this._rapidMessageCount = 0;
+            return false;
+        }
+        
+        const now = Date.now();
+        const timeSinceLastMessage = now - this._lastMessageTime;
+        
+        // If messages are coming in faster than 2 per second, consider it rapid gameplay
+        if (timeSinceLastMessage < 2000) {
+            this._rapidMessageCount++;
+        } else {
+            // Reset the counter if there's been a pause
+            this._rapidMessageCount = 0;
+        }
+        
+        this._lastMessageTime = now;
+        
+        // If we've had 3 or more rapid messages, we're in rapid gameplay mode
+        return this._rapidMessageCount >= 2;
     }
     
     /**
@@ -258,34 +408,11 @@ class MessageSystem {
         this.feedbackActive = true;
         
         // Get next message
-        const { message, duration, type } = this.feedbackQueue.shift();
+        const messageData = this.feedbackQueue.shift();
         
-        // Show message
+        // Show the message
         if (this.feedbackElement) {
-            // Support HTML content
-            this.feedbackElement.innerHTML = message;
-            
-            // Clear any existing classes first
-            this.feedbackElement.className = '';
-            
-            // Add styling classes
-            this.feedbackElement.classList.add('visible');
-            if (type) {
-                this.feedbackElement.classList.add(type);
-            }
-            
-            // Set timeout to hide message and process next in queue
-            clearTimeout(this._feedbackTimeout);
-            this._feedbackTimeout = setTimeout(() => {
-                // Remove the visible class first to trigger fade out
-                this.feedbackElement.classList.remove('visible');
-                
-                // After the transition completes, clear all classes and process the next message
-                setTimeout(() => {
-                    this.feedbackElement.className = '';
-                    this.processFeedbackQueue();
-                }, 300); // Match this to the CSS transition duration
-            }, duration);
+            this.showCurrentMessage(messageData);
         } else {
             // Element not available, try next message
             this.processFeedbackQueue();

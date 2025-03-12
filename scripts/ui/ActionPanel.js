@@ -160,7 +160,7 @@ export class ActionPanel {
         
         // Check if player has movement points
         if (playerComponent.movementPoints <= 0) {
-            this.showFeedback("No movement points left! End your turn.");
+            this.showFeedback("No movement points left! End your turn.", 'warning', 2000, false, 'resource-depleted');
             return;
         }
         
@@ -173,11 +173,11 @@ export class ActionPanel {
         if (playerComponent.currentAction === action) {
             playerComponent.setAction(null);
             this.currentAction = null;
-            this.showFeedback(`${this.formatActionName(action)} action deselected`);
+            this.showFeedback(`${this.formatActionName(action)} action deselected`, '', 2000, false, 'action-selection');
         } else {
             playerComponent.setAction(action);
             this.currentAction = action;
-            this.showFeedback(`${this.formatActionName(action)} action selected. Click a highlighted tile.`);
+            this.showFeedback(`${this.formatActionName(action)} action selected. Click a highlighted tile.`, '', 2000, false, 'action-selection');
         }
         
         // Update button states
@@ -215,13 +215,13 @@ export class ActionPanel {
         } else {
             // Last resort error case
             console.error("ActionPanel: Turn system not available and window.game not found.");
-            this.showFeedback("Error: Could not end turn. Turn system not found.", "error", 2000, true);
+            this.showFeedback("Error: Could not end turn. Turn system not found.", 'error', 2000, true, 'turn-system');
             return;
         }
         
         // Only provide feedback for failures - evolution points message will show on success
         if (!turnEnded) {
-            this.showFeedback("Failed to end turn", "error", 2000, true);
+            this.showFeedback("Failed to end turn", 'error', 2000, true, 'turn-end');
         }
         
         // Don't show "Turn ended" feedback - the evolution points awarded message 
@@ -253,13 +253,13 @@ export class ActionPanel {
         
         // If no action is selected, provide feedback
         if (!playerComponent.currentAction) {
-            this.showFeedback("Select an action first");
+            this.showFeedback("Select an action first", 'warning', 2000, false, 'action-error');
             return;
         }
         
         // Check if player has movement points
         if (playerComponent.movementPoints <= 0) {
-            this.showFeedback("No movement points left! End your turn.");
+            this.showFeedback("No movement points left! End your turn.", 'warning', 2000, false, 'resource-depleted');
             return;
         }
         
@@ -275,7 +275,7 @@ export class ActionPanel {
      */
     hasEnoughEnergy(playerComponent, energyCost) {
         if (playerComponent.energy < energyCost) {
-            this.showFeedback(`Not enough energy! Need ${energyCost}`);
+            this.showFeedback(`Not enough energy! Need ${energyCost}`, 'warning', 2000, false, 'resource-depleted');
             return false;
         }
         return true;
@@ -301,9 +301,9 @@ export class ActionPanel {
      */
     provideActionFeedback(action, success, details) {
         if (success) {
-            this.showFeedback(`${action} successful: ${details}`);
+            this.showFeedback(`${action} successful: ${details}`, 'success', 2000, true, 'action-success');
         } else {
-            this.showFeedback(`${action} failed: ${details}`);
+            this.showFeedback(`${action} failed: ${details}`, 'error', 2000, true, 'action-error');
         }
     }
 
@@ -323,7 +323,7 @@ export class ActionPanel {
             playerComponent.isAdjacentTo(row, col);
             
         if (!isAdjacentOrSame) {
-            this.showFeedback(`Cannot ${action} to that tile - too far away`);
+            this.showFeedback(`Cannot ${action} to that tile - too far away`, 'warning', 2000, false, 'action-invalid');
             return;
         }
         
@@ -343,7 +343,7 @@ export class ActionPanel {
         // Get energy cost for the action
         const energyCost = playerComponent.getActionCost(action, row, col);
         if (energyCost === -1) {
-            this.showFeedback(`Cannot ${action} on that tile type`);
+            this.showFeedback(`Cannot ${action} on that tile type`, 'warning', 2000, false, 'action-invalid');
             return;
         }
         
@@ -363,7 +363,7 @@ export class ActionPanel {
                 success = this.executeMoveAction(playerComponent, row, col, energyCost);
                 // Move action doesn't show its own feedback, so we need to do it here
                 if (success) {
-                    this.showFeedback(`Moved to (${row}, ${col}). Energy: -${energyCost}`, "success", 2000, true);
+                    this.showFeedback(`Moved to (${row}, ${col}). Energy: -${energyCost}`, "success", 2000, true, 'action-move');
                     feedbackShown = true;
                 }
                 break;
@@ -383,7 +383,7 @@ export class ActionPanel {
                 break;
                 
             default:
-                this.showFeedback(`Unknown action: ${action}`);
+                this.showFeedback(`Unknown action: ${action}`, 'error', 2000, false, 'action-error');
                 return;
         }
         
@@ -410,14 +410,14 @@ export class ActionPanel {
             if (playerComponent.movementPoints <= 0) {
                 playerComponent.setAction(null);
                 this.currentAction = null;
-                this.showFeedback("No movement points left! Action deselected.", "warning", 2000, true);
+                this.showFeedback("No movement points left! Action deselected.", "warning", 2000, true, 'resource-depleted');
             }
             
             // If player doesn't have enough energy for another action, deselect
             else if (playerComponent.energy < energyCost) {
                 playerComponent.setAction(null);
                 this.currentAction = null;
-                this.showFeedback("Not enough energy for another action! Action deselected.", "warning", 2000, true);
+                this.showFeedback("Not enough energy for another action! Action deselected.", "warning", 2000, true, 'resource-depleted');
             }
             
             // Update UI
@@ -480,7 +480,7 @@ export class ActionPanel {
         const orderLevel = Math.round(tileComponent.order * 100);
         
         // Show feedback and add to log
-        this.showFeedback(`Sensed ${tileComponent.type} tile: ${tileComponent.getChaosDescription()} (${orderLevel}% order, ${chaosLevel}% chaos)`, "success", 2000, true);
+        this.showFeedback(`Sensed ${tileComponent.type} tile: ${tileComponent.getChaosDescription()} (${orderLevel}% order, ${chaosLevel}% chaos)`, "success", 2000, true, 'action-sense');
         
         // Emit standardized event only (remove legacy event)
         eventSystem.emit('action:complete:sense', {
@@ -555,7 +555,7 @@ export class ActionPanel {
         }
         
         // Show feedback and add to log
-        this.showFeedback(feedbackMessage, "success", 2000, true);
+        this.showFeedback(feedbackMessage, "success", 2000, true, 'action-interact');
         
         // Emit standardized event only (remove legacy event)
         eventSystem.emit('action:complete:interact', {
@@ -598,7 +598,7 @@ export class ActionPanel {
         
         // Check if already fully stabilized
         if (tileComponent.chaos === 0) {
-            this.showFeedback("Tile is already fully stabilized");
+            this.showFeedback("Tile is already fully stabilized", 'info', 2000, false, 'action-stabilized');
             return false;
         }
         
@@ -627,9 +627,9 @@ export class ActionPanel {
         
         // Show feedback with more detail
         if (hasPowerfulStabilizer) {
-            this.showFeedback(`Stabilized tile with enhanced effect (${reductionPct}%)`, "success", 2000, true);
+            this.showFeedback(`Stabilized tile with enhanced effect (${reductionPct}%)`, "success", 2000, true, 'action-stabilized');
         } else {
-            this.showFeedback(`Stabilized tile, reducing chaos by ${reductionPct}%`, "success", 2000, true);
+            this.showFeedback(`Stabilized tile, reducing chaos by ${reductionPct}%`, "success", 2000, true, 'action-stabilized');
         }
         
         // Emit standardized event only (remove legacy event)
@@ -682,13 +682,14 @@ export class ActionPanel {
      * @param {string} type - Optional message type (success, error, warning)
      * @param {number} duration - How long to show the message in ms
      * @param {boolean} addToLog - Whether to also add this message to the game log
+     * @param {string} category - Optional category for message coalescing
      */
-    showFeedback(message, type = '', duration = 2000, addToLog = false) {
+    showFeedback(message, type = '', duration = 2000, addToLog = false, category = '') {
         console.log(`Feedback: ${message}`);
         
         if (this.messageSystem) {
-            // Show feedback popup
-            this.messageSystem.showFeedbackMessage(message, duration, type);
+            // Show feedback popup with category for coalescing similar messages
+            this.messageSystem.showFeedbackMessage(message, duration, type, category);
             
             // Also add to game log if requested (for important messages)
             if (addToLog) {

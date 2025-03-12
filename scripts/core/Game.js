@@ -468,8 +468,8 @@ export class Game {
             message += `<span style="color: #44ccff;">Order: +${order}</span>`;
         }
         
-        // Only show the popup message - the MessageSystem already logs this to prevent duplicates
-        this.showFeedbackMessage(message, 'evolution-points', 3000, false);
+        // Use the new message system with category for coalescing similar messages
+        this.showFeedbackMessage(message, 'evolution-points', 3000, false, 'evolution-points');
         
         // Log to console for debugging
         console.log('Game.showEvolutionPointsMessage displayed feedback popup');
@@ -481,13 +481,14 @@ export class Game {
      * @param {string} type - Type of message (success, error, evolution-points)
      * @param {number} duration - How long to show message in ms
      * @param {boolean} addToLog - Whether to also add this message to the game log
+     * @param {string} category - Optional category for message coalescing
      * @returns {boolean} Whether the message was displayed
      */
-    showFeedbackMessage(message, type = '', duration = 2000, addToLog = false) {
+    showFeedbackMessage(message, type = '', duration = 2000, addToLog = false, category = '') {
         // Always delegate to MessageSystem if available
         if (this.uiManager && this.uiManager.messageSystem && 
             typeof this.uiManager.messageSystem.showFeedbackMessage === 'function') {
-            this.uiManager.messageSystem.showFeedbackMessage(message, duration, type);
+            this.uiManager.messageSystem.showFeedbackMessage(message, duration, type, category);
             
             // Also add to log if requested
             if (addToLog && typeof this.uiManager.messageSystem.addLogMessage === 'function') {
@@ -502,8 +503,8 @@ export class Game {
             return true;
         }
         
-        // If no MessageSystem, log to console as a fallback
-        console.warn('MessageSystem not available. Feedback message:', message);
+        // Fallback if MessageSystem not available
+        console.log(`Feedback message: ${message}`);
         return false;
     }
     
