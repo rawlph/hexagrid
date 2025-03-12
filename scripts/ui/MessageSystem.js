@@ -265,8 +265,11 @@ class MessageSystem {
             // Support HTML content
             this.feedbackElement.innerHTML = message;
             
+            // Clear any existing classes first
+            this.feedbackElement.className = '';
+            
             // Add styling classes
-            this.feedbackElement.className = 'visible';
+            this.feedbackElement.classList.add('visible');
             if (type) {
                 this.feedbackElement.classList.add(type);
             }
@@ -274,12 +277,14 @@ class MessageSystem {
             // Set timeout to hide message and process next in queue
             clearTimeout(this._feedbackTimeout);
             this._feedbackTimeout = setTimeout(() => {
-                this.feedbackElement.className = '';
+                // Remove the visible class first to trigger fade out
+                this.feedbackElement.classList.remove('visible');
                 
-                // Process next message after a short delay
+                // After the transition completes, clear all classes and process the next message
                 setTimeout(() => {
+                    this.feedbackElement.className = '';
                     this.processFeedbackQueue();
-                }, 300);
+                }, 300); // Match this to the CSS transition duration
             }, duration);
         } else {
             // Element not available, try next message

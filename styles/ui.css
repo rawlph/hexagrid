@@ -150,25 +150,8 @@
 }
 
 /* Feedback Message */
-#feedback-message {
-    position: fixed;
-    bottom: 20px;
-    left: 50%;
-    transform: translateX(-50%);
-    padding: 10px 20px;
-    background-color: rgba(0, 0, 0, 0.7);
-    color: white;
-    border-radius: 4px;
-    font-weight: bold;
-    z-index: 100;
-    pointer-events: none;
-    opacity: 0;
-    transition: opacity 0.3s;
-}
-
-#feedback-message.visible {
-    opacity: 1;
-}
+/* This definition has been removed to avoid conflict with main.css */
+/* The feedback message styling is now fully handled in main.css */
 
 /* Stats Display */
 .stats-content {
