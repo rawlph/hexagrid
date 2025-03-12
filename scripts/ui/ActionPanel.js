@@ -11,10 +11,12 @@ export class ActionPanel {
      * Create a new ActionPanel
      * @param {Object} options - Configuration options
      * @param {Object} options.turnSystem - The turn system to use (optional)
+     * @param {Object} options.grid - The grid system to use (optional)
      */
     constructor(options = {}) {
         // Store dependencies
         this.turnSystem = options.turnSystem || null;
+        this.grid = options.grid || null;
         
         // Action buttons
         this.buttons = {
@@ -43,6 +45,7 @@ export class ActionPanel {
      * @param {MessageSystem} messageSystem - The message system for feedback
      * @param {Object} options - Additional initialization options
      * @param {Object} options.turnSystem - The turn system to use (optional)
+     * @param {Object} options.grid - The grid system to use (optional)
      */
     init(messageSystem, options = {}) {
         console.log("Initializing action panel");
@@ -52,6 +55,11 @@ export class ActionPanel {
         // Set turn system if provided
         if (options.turnSystem) {
             this.turnSystem = options.turnSystem;
+        }
+        
+        // Set grid if provided
+        if (options.grid) {
+            this.grid = options.grid;
         }
         
         // Set up button listeners
@@ -259,9 +267,8 @@ export class ActionPanel {
      * @param {number} chaosDelta - Change in chaos level
      */
     updateSystemBalance(chaosDelta) {
-        if (window.game && window.game.grid) {
-            console.warn('ActionPanel: Using global game.grid reference. Consider injecting grid directly.');
-            window.game.grid.updateSystemBalance(chaosDelta / 10); // Reduced effect on whole system
+        if (this.grid) {
+            this.grid.updateSystemBalance(chaosDelta / 10); // Reduced effect on whole system
         } else {
             console.error("ActionPanel: Grid not available. Could not update system balance.");
         }

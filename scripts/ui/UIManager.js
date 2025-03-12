@@ -36,13 +36,21 @@ export class UIManager {
     
     /**
      * Initialize the UI manager
+     * @param {Object} options - Options for initialization
+     * @param {Object} options.grid - Grid system to use
+     * @param {Object} options.turnSystem - Turn system to use
      */
-    init() {
+    init(options = {}) {
         console.log("Initializing UI manager");
         
-        // Initialize subsystems
+        // Initialize message system
         this.messageSystem.init();
-        this.actionPanel.init(this.messageSystem);
+        
+        // Initialize action panel with dependencies
+        this.actionPanel.init(this.messageSystem, {
+            grid: options.grid || (window.game ? window.game.grid : null),
+            turnSystem: options.turnSystem || (window.game ? window.game.turnSystem : null)
+        });
         
         // Set up button listeners
         this.setupButtonListeners();

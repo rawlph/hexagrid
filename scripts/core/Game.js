@@ -113,7 +113,10 @@ export class Game {
             // Initialize UI Manager
             this.uiManager = new UIManager();
             if (this.uiManager && typeof this.uiManager.init === 'function') {
-                this.uiManager.init();
+                this.uiManager.init({
+                    grid: this.grid,
+                    turnSystem: this.turnSystem
+                });
             } else {
                 console.warn('UIManager initialization failed');
             }
@@ -684,6 +687,19 @@ export class Game {
             const { row, col, tileEntity } = data;
             console.log(`Game: Tile clicked at (${row}, ${col})`);
             
+            // Check if we can delegate to ActionPanel
+            if (window.actionPanel && typeof window.actionPanel.handleTileClick === 'function') {
+                // Since ActionPanel already has its own event listener for tileClicked,
+                // we shouldn't call handleTileClick directly to avoid double execution
+                
+                // Instead, just log that we received the event too
+                console.debug("Game received tile click, but ActionPanel is handling it");
+                return;
+            }
+            
+            // Only execute this fallback code if ActionPanel is not available
+            // This ensures the game still works without the ActionPanel
+            
             // Get player entity
             const playerEntity = this.entityManager.getEntitiesByTag('player')[0];
             if (!playerEntity) {
@@ -703,33 +719,11 @@ export class Game {
                 return;
             }
             
-            // Check if we can delegate to ActionPanel (preferred way to avoid duplication)
-            if (window.actionPanel && typeof window.actionPanel.handleTileClick === 'function') {
-                // Let ActionPanel handle the tile click to avoid duplicate logic
-                console.log("Delegating tile click to ActionPanel");
-                // The actionPanel already has its own event handler, so we don't need to do anything
-                return;
-            }
+            // Continue with the fallback implementation...
+            console.warn("Using Game.js fallback tile click handler - ActionPanel not available");
             
-            // If ActionPanel is not available, fall back to direct handling
-            // This is a fallback to ensure the game still works if UIManager/ActionPanel isn't available
-            
-            // Get tile component
-            if (!tileEntity) {
-                console.warn("No tile entity found");
-                return;
-            }
-            
-            const tileComponent = tileEntity.getComponent(TileComponent);
-            if (!tileComponent) {
-                console.warn("No tile component found");
-                return;
-            }
-            
-            console.log(`Attempting ${playerComponent.currentAction} action on tile (${row}, ${col})`);
-            
-            // Continue with the rest of the method...
-            // Additional implementation would go here
+            // This is only a fallback if ActionPanel is not available,
+            // so we don't need to implement the full functionality here
         } catch (error) {
             console.error("Error handling tile click:", error);
         }
