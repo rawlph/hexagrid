@@ -59,56 +59,30 @@ class MessageSystem {
      * Register event listeners
      */
     registerEventListeners() {
-        // Player action events
-        this._registeredEvents.push(
-            eventSystem.on('playerMoved', data => {
-                this.addLogMessage(`Moved to (${data.toRow}, ${data.toCol})`, "player");
-            })
-        );
+        // Player action events - using only standardized event names to avoid duplicates
         
-        // Action events
+        // Move actions
         this._registeredEvents.push(
             eventSystem.on('action:complete:move', data => {
                 this.addLogMessage(`Moved to (${data.row}, ${data.col})`, "player");
             })
         );
         
-        // Legacy event
-        this._registeredEvents.push(
-            eventSystem.on('senseComplete', data => {
-                this.addLogMessage(`Sensed tile at (${data.row}, ${data.col})`, "player");
-            })
-        );
-        
-        // Standardized event
+        // Sense actions
         this._registeredEvents.push(
             eventSystem.on('action:complete:sense', data => {
                 this.addLogMessage(`Sensed tile at (${data.row}, ${data.col})`, "player");
             })
         );
         
-        // Legacy event
-        this._registeredEvents.push(
-            eventSystem.on('interactComplete', data => {
-                this.addLogMessage(`Interacted with tile at (${data.row}, ${data.col})`, "player");
-            })
-        );
-        
-        // Standardized event
+        // Interact actions
         this._registeredEvents.push(
             eventSystem.on('action:complete:interact', data => {
                 this.addLogMessage(`Interacted with tile at (${data.row}, ${data.col})`, "player");
             })
         );
         
-        // Legacy event
-        this._registeredEvents.push(
-            eventSystem.on('stabilizeComplete', data => {
-                this.addLogMessage(`Stabilized tile at (${data.row}, ${data.col})`, "player");
-            })
-        );
-        
-        // Standardized event
+        // Stabilize actions
         this._registeredEvents.push(
             eventSystem.on('action:complete:stabilize', data => {
                 this.addLogMessage(`Stabilized tile at (${data.row}, ${data.col})`, "player");
@@ -154,7 +128,17 @@ class MessageSystem {
         // Evolution events
         this._registeredEvents.push(
             eventSystem.on('evolutionPointsAwarded', data => {
-                this.addLogMessage(`Earned ${data.points} evolution points`, "event");
+                // Don't add to message log - Game.js already shows the feedback message
+                // This prevents duplicate notifications for evolution points
+                // Uncomment below if you want to show in log too, but not as a popup
+                /*
+                // Calculate total points awarded
+                const totalPoints = data.pointsAwarded ? 
+                    (data.pointsAwarded.chaos || 0) + 
+                    (data.pointsAwarded.flow || 0) + 
+                    (data.pointsAwarded.order || 0) : 0;
+                this.addLogMessage(`Earned ${totalPoints} evolution points`, "event");
+                */
             })
         );
         
@@ -217,12 +201,14 @@ class MessageSystem {
      * Show a feedback message
      * @param {string} message - The message text
      * @param {number} duration - Display duration in milliseconds
+     * @param {string} type - Message type (success, error, warning, evolution-points)
      */
-    showFeedbackMessage(message, duration = 2000) {
+    showFeedbackMessage(message, duration = 2000, type = '') {
         // Add to queue
         this.feedbackQueue.push({
             message,
-            duration
+            duration,
+            type
         });
         
         // Process queue if not active
@@ -243,24 +229,31 @@ class MessageSystem {
         this.feedbackActive = true;
         
         // Get next message
-        const { message, duration } = this.feedbackQueue.shift();
+        const { message, duration, type } = this.feedbackQueue.shift();
         
         // Show message
         if (this.feedbackElement) {
-            this.feedbackElement.textContent = message;
-            this.feedbackElement.classList.add('visible');
+            // Support HTML content
+            this.feedbackElement.innerHTML = message;
             
-            // Hide after duration
-            setTimeout(() => {
-                this.feedbackElement.classList.remove('visible');
+            // Add styling classes
+            this.feedbackElement.className = 'visible';
+            if (type) {
+                this.feedbackElement.classList.add(type);
+            }
+            
+            // Set timeout to hide message and process next in queue
+            clearTimeout(this._feedbackTimeout);
+            this._feedbackTimeout = setTimeout(() => {
+                this.feedbackElement.className = '';
                 
-                // Wait for animation to complete
+                // Process next message after a short delay
                 setTimeout(() => {
                     this.processFeedbackQueue();
                 }, 300);
             }, duration);
         } else {
-            // If element not available, just skip to next message
+            // Element not available, try next message
             this.processFeedbackQueue();
         }
     }

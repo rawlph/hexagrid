@@ -481,20 +481,31 @@ export class TurnSystem {
         // Calculate points to award
         const pointsToAward = this.calculateEvolutionPoints();
         
-        // Award the points
+        // Award the points - suppress individual events to avoid duplicate messages
         if (pointsToAward.chaos > 0) {
-            playerComponent.addEvolutionPoints('chaos', pointsToAward.chaos);
+            playerComponent.addEvolutionPoints('chaos', pointsToAward.chaos, true); // Suppress event
         }
         
         if (pointsToAward.flow > 0) {
-            playerComponent.addEvolutionPoints('flow', pointsToAward.flow);
+            playerComponent.addEvolutionPoints('flow', pointsToAward.flow, true); // Suppress event
         }
         
         if (pointsToAward.order > 0) {
-            playerComponent.addEvolutionPoints('order', pointsToAward.order);
+            playerComponent.addEvolutionPoints('order', pointsToAward.order, true); // Suppress event
         }
         
-        // Emit an event about points being awarded
+        // Now that all points have been added, emit events
+        
+        // First emit playerEvolutionPointsChanged to update the UI display
+        eventSystem.emit('playerEvolutionPointsChanged', {
+            player: playerComponent,
+            chaosPoints: playerComponent.chaosEvolutionPoints,
+            flowPoints: playerComponent.flowEvolutionPoints,
+            orderPoints: playerComponent.orderEvolutionPoints,
+            totalPoints: playerComponent.evolutionPoints
+        });
+        
+        // Then emit evolutionPointsAwarded for the feedback message
         eventSystem.emit('evolutionPointsAwarded', {
             turnCount: this.turnCount,
             pointsAwarded: pointsToAward,
@@ -506,6 +517,8 @@ export class TurnSystem {
         
         // Check if player has enough points to evolve
         this.checkEvolutionReady(playerComponent);
+        
+        return true;
     }
     
     /**

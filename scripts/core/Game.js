@@ -438,22 +438,38 @@ export class Game {
      * @param {Object} data - Event data
      */
     showEvolutionPointsMessage(data) {
-        const { pointsAwarded } = data;
-        let message = `<span style="color: #e0e0e0;">Evolution points earned:</span> `;
+        const { pointsAwarded, turnCount } = data;
         
-        // Add chaos points to message if any were awarded
-        if (pointsAwarded.chaos > 0) {
-            message += `<span style="color: var(--chaos-color);">${pointsAwarded.chaos} Chaos</span> `;
-        }
+        // Calculate total points awarded
+        const totalPoints = 
+            (pointsAwarded.chaos || 0) + 
+            (pointsAwarded.flow || 0) + 
+            (pointsAwarded.order || 0);
+            
+        // Always show a turn completed message, possibly with points earned
+        let message = `<span style="color: #e0e0e0;">Turn ${turnCount} completed`;
         
-        // Add flow points to message if any were awarded
-        if (pointsAwarded.flow > 0) {
-            message += `<span style="color: #64dfdf;">${pointsAwarded.flow} Flow</span> `;
-        }
-        
-        // Add order points to message if any were awarded
-        if (pointsAwarded.order > 0) {
-            message += `<span style="color: var(--order-color);">${pointsAwarded.order} Order</span>`;
+        // If points were awarded, add them to the message
+        if (totalPoints > 0) {
+            message += `. Evolution points earned:</span> `;
+            
+            // Add chaos points to message if any were awarded
+            if (pointsAwarded.chaos > 0) {
+                message += `<span style="color: var(--chaos-color);">${pointsAwarded.chaos} Chaos</span> `;
+            }
+            
+            // Add flow points to message if any were awarded
+            if (pointsAwarded.flow > 0) {
+                message += `<span style="color: #64dfdf;">${pointsAwarded.flow} Flow</span> `;
+            }
+            
+            // Add order points to message if any were awarded
+            if (pointsAwarded.order > 0) {
+                message += `<span style="color: var(--order-color);">${pointsAwarded.order} Order</span>`;
+            }
+        } else {
+            // Just close the span if no points were awarded
+            message += `.</span>`;
         }
         
         // Display message
@@ -465,84 +481,60 @@ export class Game {
      * @param {string} message - Message to display
      * @param {string} type - Type of message (success, error, evolution-points)
      * @param {number} duration - How long to show message in ms
+     * @param {boolean} addToLog - Whether to also add this message to the game log
+     * @returns {boolean} Whether the message was displayed
      */
-    showFeedbackMessage(message, type = '', duration = 2000) {
-        const feedbackElement = document.getElementById('feedback-message');
-        if (!feedbackElement) return;
-        
-        // Set message content (supports HTML)
-        feedbackElement.innerHTML = message;
-        
-        // Add styling based on type
-        feedbackElement.className = 'visible';
-        if (type) {
-            feedbackElement.classList.add(type);
+    showFeedbackMessage(message, type = '', duration = 2000, addToLog = false) {
+        // Always delegate to MessageSystem if available
+        if (this.uiManager && this.uiManager.messageSystem && 
+            typeof this.uiManager.messageSystem.showFeedbackMessage === 'function') {
+            this.uiManager.messageSystem.showFeedbackMessage(message, duration, type);
+            
+            // Also add to log if requested
+            if (addToLog && typeof this.uiManager.messageSystem.addLogMessage === 'function') {
+                // Convert message type to log type
+                let logType = 'system';
+                if (type === 'success') logType = 'player';
+                if (type === 'error' || type === 'warning') logType = 'event';
+                
+                this.uiManager.messageSystem.addLogMessage(message, logType);
+            }
+            
+            return true;
         }
         
-        // Show message
-        clearTimeout(this._feedbackTimeout);
-        
-        // Hide after duration
-        this._feedbackTimeout = setTimeout(() => {
-            feedbackElement.className = '';
-        }, duration);
+        // If no MessageSystem, log to console as a fallback
+        console.warn('MessageSystem not available. Feedback message:', message);
+        return false;
     }
     
     /**
-     * Show feedback message
+     * Show feedback message - simplified wrapper for showFeedbackMessage
      * @param {string} message - Message to show
+     * @param {string} type - Type of message (optional)
+     * @param {boolean} addToLog - Whether to also add to log
      */
-    showFeedback(message) {
-        const feedbackEl = document.getElementById('feedback-message');
-        if (!feedbackEl) {
-            console.error("Feedback element not found");
-            return;
-        }
-        
-        // Clear any existing content
-        feedbackEl.textContent = '';
-        
-        // Add new message
-        feedbackEl.textContent = message;
-        
-        // Make visible
-        feedbackEl.classList.add('visible');
-        
-        // Add message to log
-        this.addLogMessage(message);
-        
-        // Hide after delay
-        clearTimeout(this.feedbackTimeout);
-        this.feedbackTimeout = setTimeout(() => {
-            feedbackEl.classList.remove('visible');
-        }, 2000);
+    showFeedback(message, type = '', addToLog = false) {
+        this.showFeedbackMessage(message, type, 2000, addToLog);
     }
     
     /**
-     * Add message to the game log
+     * Add a message to the game log
      * @param {string} message - Message to add
+     * @param {string} type - Message type (system, player, event)
+     * @returns {boolean} Whether the message was added
      */
-    addLogMessage(message) {
-        const messageContainer = document.getElementById('message-container');
-        if (!messageContainer) return;
+    addLogMessage(message, type = 'system') {
+        // Delegate to MessageSystem if available
+        if (this.uiManager && this.uiManager.messageSystem && 
+            typeof this.uiManager.messageSystem.addLogMessage === 'function') {
+            this.uiManager.messageSystem.addLogMessage(message, type);
+            return true;
+        }
         
-        const messageEl = document.createElement('div');
-        messageEl.className = 'message';
-        
-        const timestamp = document.createElement('span');
-        timestamp.className = 'timestamp';
-        timestamp.textContent = new Date().toLocaleTimeString();
-        
-        const messageText = document.createElement('span');
-        messageText.className = 'message-text';
-        messageText.textContent = message;
-        
-        messageEl.appendChild(timestamp);
-        messageEl.appendChild(messageText);
-        messageContainer.appendChild(messageEl);
-        
-        // Scroll to bottom
-        messageContainer.scrollTop = messageContainer.scrollHeight;
+        // If no MessageSystem, log to console as a fallback
+        console.log(`[${type}] ${message}`);
+        return false;
     }
     
     /**

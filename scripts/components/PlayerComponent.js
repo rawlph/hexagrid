@@ -355,8 +355,9 @@ export class PlayerComponent {
      * Add evolution points of a specific type
      * @param {string} type - Type of evolution points ('chaos', 'flow', or 'order')
      * @param {number} amount - Amount of points to add
+     * @param {boolean} [suppressEvent=false] - Whether to suppress the event emission
      */
-    addEvolutionPoints(type, amount) {
+    addEvolutionPoints(type, amount, suppressEvent = false) {
         if (amount <= 0) return;
         
         switch (type) {
@@ -378,16 +379,20 @@ export class PlayerComponent {
         // For backwards compatibility, also update total points
         this.evolutionPoints = this.chaosEvolutionPoints + this.flowEvolutionPoints + this.orderEvolutionPoints;
         
-        // Emit an event about the evolution points change
-        eventSystem.emit('playerEvolutionPointsChanged', {
-            player: this,
-            type: type,
-            amount: amount,
-            chaosPoints: this.chaosEvolutionPoints,
-            flowPoints: this.flowEvolutionPoints,
-            orderPoints: this.orderEvolutionPoints,
-            totalPoints: this.evolutionPoints
-        });
+        // Only emit the event if not suppressed
+        // This allows TurnSystem to add points without triggering duplicate events
+        if (!suppressEvent) {
+            // Emit an event about the evolution points change
+            eventSystem.emit('playerEvolutionPointsChanged', {
+                player: this,
+                type: type,
+                amount: amount,
+                chaosPoints: this.chaosEvolutionPoints,
+                flowPoints: this.flowEvolutionPoints,
+                orderPoints: this.orderEvolutionPoints,
+                totalPoints: this.evolutionPoints
+            });
+        }
         
         console.log(`Added ${amount} ${type} evolution points. Total ${type}: ${this[type + 'EvolutionPoints']}`);
     }

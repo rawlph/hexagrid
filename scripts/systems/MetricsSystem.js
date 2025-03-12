@@ -80,20 +80,8 @@ export class MetricsSystem {
             eventSystem.on('tileExplored', this.onTileExplored.bind(this))
         );
         
-        // Actions - Legacy events
-        this._registeredEvents.push(
-            eventSystem.on('senseComplete', this.onSenseComplete.bind(this))
-        );
-        
-        this._registeredEvents.push(
-            eventSystem.on('interactComplete', this.onInteractComplete.bind(this))
-        );
-        
-        this._registeredEvents.push(
-            eventSystem.on('stabilizeComplete', this.onStabilizeComplete.bind(this))
-        );
-        
-        // Actions - Standardized events
+        // Actions - remove legacy event listeners
+        // Only keep standardized event listeners
         this._registeredEvents.push(
             eventSystem.on('action:complete:sense', this.onSenseComplete.bind(this))
         );

@@ -188,9 +188,6 @@ export class ActionPanel {
         // Clear current action in the ActionPanel
         this.currentAction = null;
         
-        // Since Game.endTurn() now handles player action clearing, we don't need to duplicate it here
-        // However, we'll update UI and provide feedback to the player
-        
         let turnEnded = false;
         
         // Use the proper dependency chain to end the turn
@@ -204,19 +201,17 @@ export class ActionPanel {
         } else {
             // Last resort error case
             console.error("ActionPanel: Turn system not available and window.game not found.");
-            this.showFeedback("Error: Could not end turn. Turn system not found.");
+            this.showFeedback("Error: Could not end turn. Turn system not found.", "error", 2000, true);
             return;
         }
         
-        // Provide user feedback
-        if (turnEnded) {
-            this.showFeedback("Turn ended");
-            
-            // Make sure buttons are updated
-            this.updateButtonStates();
-        } else {
-            this.showFeedback("Failed to end turn");
+        // Only provide feedback for failures - successful end turn feedback will come from evolution points message
+        if (!turnEnded) {
+            this.showFeedback("Failed to end turn", "error", 2000, true);
         }
+        
+        // Always update button states
+        this.updateButtonStates();
     }
     
     /**
@@ -453,18 +448,8 @@ export class ActionPanel {
         
         this.showFeedback(`Sensed ${tileComponent.type} tile: ${tileComponent.getChaosDescription()} (${orderLevel}% order, ${chaosLevel}% chaos)`);
         
-        // Emit event with standardized name
+        // Emit standardized event only (remove legacy event)
         eventSystem.emit('action:complete:sense', {
-            player: playerComponent,
-            tileComponent: tileComponent,
-            row: row,
-            col: col,
-            chaosLevel: tileComponent.chaos,
-            orderLevel: tileComponent.order
-        });
-        
-        // Legacy event name for backward compatibility
-        eventSystem.emit('senseComplete', {
             player: playerComponent,
             tileComponent: tileComponent,
             row: row,
@@ -534,16 +519,8 @@ export class ActionPanel {
             }
         }
         
-        // Emit event with standardized name
+        // Emit standardized event only (remove legacy event)
         eventSystem.emit('action:complete:interact', {
-            player: playerComponent,
-            tileComponent: tileComponent,
-            row: row,
-            col: col
-        });
-        
-        // Legacy event name for backward compatibility
-        eventSystem.emit('interactComplete', {
             player: playerComponent,
             tileComponent: tileComponent,
             row: row,
@@ -612,24 +589,13 @@ export class ActionPanel {
         
         // Show feedback with more detail
         if (hasPowerfulStabilizer) {
-            this.showFeedback(`Stabilized tile with enhanced effect (${reductionPct}%)`);
+            this.showFeedback(`Stabilized tile with enhanced effect (${reductionPct}%)`, "success", 2000, true);
         } else {
-            this.showFeedback(`Stabilized tile, reducing chaos by ${reductionPct}%`);
+            this.showFeedback(`Stabilized tile, reducing chaos by ${reductionPct}%`, "success", 2000, true);
         }
         
-        // Emit event with standardized name
+        // Emit standardized event only (remove legacy event)
         eventSystem.emit('action:complete:stabilize', {
-            player: playerComponent,
-            tileComponent: tileComponent,
-            row: row,
-            col: col,
-            oldChaos: oldChaos,
-            newChaos: newChaos,
-            reduction: oldChaos - newChaos
-        });
-        
-        // Legacy event name for backward compatibility
-        eventSystem.emit('stabilizeComplete', {
             player: playerComponent,
             tileComponent: tileComponent,
             row: row,
@@ -675,12 +641,26 @@ export class ActionPanel {
     /**
      * Display feedback message
      * @param {string} message - The message to show
+     * @param {string} type - Optional message type (success, error, warning)
+     * @param {number} duration - How long to show the message in ms
+     * @param {boolean} addToLog - Whether to also add this message to the game log
      */
-    showFeedback(message) {
+    showFeedback(message, type = '', duration = 2000, addToLog = false) {
         console.log(`Feedback: ${message}`);
         
         if (this.messageSystem) {
-            this.messageSystem.showFeedbackMessage(message);
+            // Show feedback popup
+            this.messageSystem.showFeedbackMessage(message, duration, type);
+            
+            // Also add to game log if requested (for important messages)
+            if (addToLog) {
+                // Convert message type to log type
+                let logType = 'system';
+                if (type === 'success') logType = 'player';
+                if (type === 'error' || type === 'warning') logType = 'event';
+                
+                this.messageSystem.addLogMessage(message, logType);
+            }
         }
     }
     
