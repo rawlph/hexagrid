@@ -9,9 +9,9 @@ import { utils } from './utils/utils.js';
 // Make utils globally available for the components that need it
 window.utils = utils;
 
-// Create core systems and make them globally available
-import { eventSystem } from './core/EventSystem.js';
-import { Entity, entityManager } from './core/EntityManager.js';
+// Import core systems
+import { EventSystem, eventSystem } from './core/EventSystem.js';
+import { Entity, Component, entityManager } from './core/EntityManager.js';
 import { Grid } from './core/Grid.js';
 import { TurnSystem } from './core/TurnSystem.js';
 

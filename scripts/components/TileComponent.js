@@ -2,15 +2,20 @@
  * Tile Component for Hexgrid Evolution
  * Handles properties and behavior of hex grid tiles
  */
-export class TileComponent {
+import { Component } from '../core/EntityManager.js';
+
+export class TileComponent extends Component {
     /**
      * Create a new tile component
+     * @param {Entity} entity - The entity this component belongs to
      * @param {string} type - Type of tile (normal, energy, chaotic, orderly, obstacle)
      * @param {number} row - Grid row position
      * @param {number} col - Grid column position
      * @param {number} chaos - Initial chaos level (0-1)
      */
-    constructor(type = 'normal', row, col, chaos = 0.5) {
+    constructor(entity, type = 'normal', row, col, chaos = 0.5) {
+        super(entity);
+        
         this.type = type;
         this.row = row;
         this.col = col;
@@ -27,7 +32,7 @@ export class TileComponent {
             stabilize: 1
         };
         
-        // Effects and properties
+        // Special properties based on tile type
         this.energyValue = 0;
         this.stabilizeEffect = 0;
         this.interactEffect = 0;

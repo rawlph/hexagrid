@@ -321,10 +321,11 @@ export class Grid {
         // Ensure chaos is within valid range
         chaos = utils.clamp(chaos, 0.1, 0.9);
         
-        // Create the entity
+        // Create the entity using the imported Entity class
         const entity = new Entity();
         
         // Add tile component with position and type
+        // Note: The component constructor will now receive the entity as first parameter
         const tileComponent = entity.addComponent(TileComponent, tileType, row, col, chaos);
         
         // Attach DOM element to component
@@ -333,7 +334,7 @@ export class Grid {
         // Add a tag for easy lookup by position
         entity.addTag(`tile_${row}_${col}`);
         
-        // Add entity to entity manager
+        // Add entity to entity manager - use the imported entityManager
         entityManager.addEntity(entity);
         
         // Store the entity in our tiles array for easy access

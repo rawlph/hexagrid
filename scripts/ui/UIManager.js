@@ -582,23 +582,28 @@ export class UIManager {
      * @param {object} data - Evolution points data
      */
     updateEvolutionPointsDisplay(data) {
+        // Use default values of 0 if data properties are undefined
+        const chaosPoints = data.chaosPoints !== undefined ? data.chaosPoints : 0;
+        const flowPoints = data.flowPoints !== undefined ? data.flowPoints : 0;
+        const orderPoints = data.orderPoints !== undefined ? data.orderPoints : 0;
+        
         // Update chaos evolution points - use the specific evolution chaos display
-        if (this.evolutionChaosDisplay && data.chaosPoints !== undefined) {
-            this.evolutionChaosDisplay.textContent = data.chaosPoints;
+        if (this.evolutionChaosDisplay) {
+            this.evolutionChaosDisplay.textContent = chaosPoints;
         }
         
         // Update flow evolution points
-        if (this.evolutionFlowDisplay && data.flowPoints !== undefined) {
-            this.evolutionFlowDisplay.textContent = data.flowPoints;
+        if (this.evolutionFlowDisplay) {
+            this.evolutionFlowDisplay.textContent = flowPoints;
         }
         
         // Update order evolution points - use the specific evolution order display
-        if (this.evolutionOrderDisplay && data.orderPoints !== undefined) {
-            this.evolutionOrderDisplay.textContent = data.orderPoints;
+        if (this.evolutionOrderDisplay) {
+            this.evolutionOrderDisplay.textContent = orderPoints;
         }
         
         // Log updates for debugging
-        console.log(`UIManager: Updated evolution points display - Chaos: ${data.chaosPoints}, Flow: ${data.flowPoints}, Order: ${data.orderPoints}`);
+        console.log(`UIManager: Updated evolution points display - Chaos: ${chaosPoints}, Flow: ${flowPoints}, Order: ${orderPoints}`);
     }
     
     /**

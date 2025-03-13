@@ -11,6 +11,7 @@ import { Grid } from './Grid.js';
 import { TurnSystem } from './TurnSystem.js';
 import { entityManager } from './EntityManager.js';
 import { eventSystem } from './EventSystem.js';
+import { Entity } from './Entity.js';
 
 export class Game {
     /**
@@ -561,19 +562,14 @@ export class Game {
             if (existingPlayers && existingPlayers.length > 0) {
                 console.warn(`Found ${existingPlayers.length} existing player entities, removing them...`);
                 for (const player of existingPlayers) {
-                    this.entityManager.removeEntity(player);
+                    this.entityManager.removeEntity(player.id);
                 }
             }
             
-            // Ensure Entity class is available
-            if (!window.Entity || !window.PlayerComponent) {
-                throw new Error('Entity or PlayerComponent classes not found');
-            }
-            
-            // Create player entity at top-left corner
+            // Use the imported Entity class directly, no need to check window.Entity
             const playerEntity = new Entity();
             
-            // Add player component
+            // Add player component - the entity is passed automatically to the component constructor
             const playerComponent = playerEntity.addComponent(PlayerComponent, 0, 0);
             if (!playerComponent) {
                 throw new Error('Failed to add PlayerComponent to player entity');
@@ -586,11 +582,7 @@ export class Game {
             this.entityManager.addEntity(playerEntity);
             
             // Initialize player
-            if (typeof playerComponent.init === 'function') {
-                playerComponent.init();
-            } else {
-                console.warn('Player component has no init method');
-            }
+            playerEntity.init();
             
             return playerEntity;
         } catch (error) {
@@ -737,6 +729,23 @@ export class Game {
         
         // Reset evolution system when starting a completely new game
         this.evolutionSystem.reset(false); // Don't keep traits
+        
+        // Get the player component to ensure UI is updated with zeroed evolution points
+        const playerEntity = this.entityManager.getEntitiesByTag('player')[0];
+        if (playerEntity) {
+            const playerComponent = playerEntity.getComponent(PlayerComponent);
+            if (playerComponent) {
+                // Explicitly emit event to update UI with reset evolution points
+                this.eventSystem.emit('playerEvolutionPointsChanged', {
+                    player: playerComponent,
+                    chaosPoints: playerComponent.chaosEvolutionPoints,
+                    flowPoints: playerComponent.flowEvolutionPoints,
+                    orderPoints: playerComponent.orderEvolutionPoints,
+                    totalPoints: playerComponent.evolutionPoints
+                });
+                console.log("Explicitly updating UI with reset evolution points");
+            }
+        }
     }
     
     /**

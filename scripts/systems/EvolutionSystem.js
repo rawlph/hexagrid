@@ -3,6 +3,7 @@
  */
 import { MetricsSystem } from './MetricsSystem.js';
 import { entityManager } from '../core/EntityManager.js';
+import { PlayerComponent } from '../components/PlayerComponent.js';
 
 export class EvolutionSystem {
     constructor() {
@@ -150,6 +151,15 @@ export class EvolutionSystem {
         
         // Event listeners
         this._registeredEvents = [];
+        
+        // Trait categories
+        this.categories = [
+            'movement',
+            'sense',
+            'manipulation',
+            'adaptation',
+            'survival'
+        ];
     }
     
     /**
@@ -422,12 +432,35 @@ export class EvolutionSystem {
      * @param {boolean} keepTraits - Whether to keep acquired traits
      */
     reset(keepTraits = true) {
-        // Reset points
+        console.log(`EvolutionSystem: Resetting evolution system, keepTraits=${keepTraits}`);
+        
+        // Reset points in the evolution system
         this.availablePoints = 0;
         
         // Reset acquired traits if not keeping them
         if (!keepTraits) {
             this.acquiredTraits = {};
+        }
+        
+        // Also reset the player's evolution points
+        // Find the player entity
+        const playerEntity = entityManager.getEntitiesByTag('player')[0];
+        if (playerEntity) {
+            const playerComponent = playerEntity.getComponent(PlayerComponent);
+            if (playerComponent) {
+                console.log("EvolutionSystem: Found player component, resetting evolution points");
+                
+                // Reset player evolution points
+                playerComponent.chaosEvolutionPoints = 0;
+                playerComponent.flowEvolutionPoints = 0;
+                playerComponent.orderEvolutionPoints = 0;
+                playerComponent.evolutionPoints = 0;
+                
+                // Clear traits if not keeping them
+                if (!keepTraits) {
+                    playerComponent.traits = [];
+                }
+            }
         }
         
         // Emit event

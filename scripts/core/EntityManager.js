@@ -1,16 +1,83 @@
 /**
- * Entity System for Hexgrid Evolution
- * Provides entity-component system for game objects
+ * Entity Component System for Hexgrid Evolution
+ * Provides a robust entity-component system for game objects
  */
 
 /**
- * Basic entity class that can have components attached
+ * Base class for components
+ */
+export class Component {
+    /**
+     * Create a new component
+     * @param {Entity} entity - The entity this component belongs to
+     */
+    constructor(entity) {
+        this.entity = entity;
+        this.enabled = true;
+    }
+
+    /**
+     * Initialize the component
+     * Called by entity.init()
+     */
+    init() {
+        // Override in derived classes
+    }
+
+    /**
+     * Update the component
+     * Called by entity.update()
+     * @param {number} deltaTime - Time elapsed since last update
+     */
+    update(deltaTime) {
+        // Override in derived classes
+    }
+
+    /**
+     * Clean up the component
+     * Called by entity.destroy() or entity.removeComponent()
+     */
+    destroy() {
+        // Override in derived classes
+    }
+
+    /**
+     * Enable this component
+     */
+    enable() {
+        this.enabled = true;
+        return this;
+    }
+
+    /**
+     * Disable this component
+     */
+    disable() {
+        this.enabled = false;
+        return this;
+    }
+}
+
+/**
+ * Entity class that can have components attached
  */
 export class Entity {
+    /**
+     * Create a new entity
+     */
     constructor() {
-        this.id = utils.generateId();
+        // Generate a unique ID using utils if available or fallback
+        this.id = typeof utils !== 'undefined' && utils.generateId 
+            ? utils.generateId() 
+            : 'entity_' + Math.floor(Math.random() * 10000);
+            
+        // Initialize component storage with Map for better performance
         this.components = new Map();
+        
+        // Initialize tags with Set for better performance and uniqueness
         this.tags = new Set();
+        
+        // Flag to indicate if the entity is active
         this.isActive = true;
     }
     
@@ -21,15 +88,25 @@ export class Entity {
      * @returns {Object} Instantiated component
      */
     addComponent(ComponentClass, ...args) {
-        const component = new ComponentClass(...args);
-        const componentName = ComponentClass.name;
-        
-        this.components.set(componentName, component);
-        
-        // Register with entity manager
-        entityManager.registerComponent(this, componentName);
-        
-        return component;
+        try {
+            // First, create the component instance
+            const component = new ComponentClass(this, ...args);
+            const componentName = ComponentClass.name;
+            
+            // Store component by its constructor name
+            this.components.set(componentName, component);
+            
+            // Notify entity manager if available
+            const em = getEntityManagerInstance();
+            if (em) {
+                em.registerComponent(this, componentName);
+            }
+            
+            return component;
+        } catch (error) {
+            console.error(`Failed to add component ${ComponentClass ? ComponentClass.name : 'unknown'} to entity ${this.id}:`, error);
+            return null;
+        }
     }
     
     /**
@@ -76,7 +153,10 @@ export class Entity {
         this.components.delete(componentName);
         
         // Unregister from entity manager
-        entityManager.unregisterComponent(this, componentName);
+        const em = getEntityManagerInstance();
+        if (em) {
+            em.unregisterComponent(this, componentName);
+        }
         
         return true;
     }
@@ -94,7 +174,10 @@ export class Entity {
         this.tags.add(tag);
         
         // Register with entity manager
-        entityManager.registerTag(this, tag);
+        const em = getEntityManagerInstance();
+        if (em) {
+            em.registerTag(this, tag);
+        }
         
         return this;
     }
@@ -121,7 +204,10 @@ export class Entity {
         this.tags.delete(tag);
         
         // Unregister from entity manager
-        entityManager.unregisterTag(this, tag);
+        const em = getEntityManagerInstance();
+        if (em) {
+            em.unregisterTag(this, tag);
+        }
         
         return this;
     }
@@ -132,9 +218,14 @@ export class Entity {
     init() {
         for (const component of this.components.values()) {
             if (component.init && typeof component.init === 'function') {
-                component.init();
+                try {
+                    component.init();
+                } catch (error) {
+                    console.error(`Error initializing component ${component.constructor.name} on entity ${this.id}:`, error);
+                }
             }
         }
+        return this;
     }
     
     /**
@@ -145,8 +236,14 @@ export class Entity {
         if (!this.isActive) return;
         
         for (const component of this.components.values()) {
+            if (!component.enabled) continue;
+            
             if (component.update && typeof component.update === 'function') {
-                component.update(deltaTime);
+                try {
+                    component.update(deltaTime);
+                } catch (error) {
+                    console.error(`Error updating component ${component.constructor.name} on entity ${this.id}:`, error);
+                }
             }
         }
     }
@@ -158,7 +255,11 @@ export class Entity {
         // Clean up all components
         for (const component of this.components.values()) {
             if (component.destroy && typeof component.destroy === 'function') {
-                component.destroy();
+                try {
+                    component.destroy();
+                } catch (error) {
+                    console.error(`Error destroying component ${component.constructor.name} on entity ${this.id}:`, error);
+                }
             }
         }
         
@@ -167,7 +268,13 @@ export class Entity {
         this.tags.clear();
         
         // Remove from entity manager
-        entityManager.removeEntity(this.id);
+        const em = getEntityManagerInstance();
+        if (em) {
+            em.removeEntity(this.id);
+        }
+        
+        // Mark as inactive
+        this.isActive = false;
     }
 }
 
@@ -176,9 +283,22 @@ export class Entity {
  */
 class EntityManager {
     constructor() {
+        // Check if instance already exists
+        if (EntityManager.instance) {
+            console.warn('EntityManager singleton already exists, returning existing instance');
+            return EntityManager.instance;
+        }
+        
+        // Store the instance
+        EntityManager.instance = this;
+        
+        // Initialize data structures
         this.entities = new Map();
         this.taggedEntities = new Map();
         this.componentEntities = new Map();
+        
+        // Flag for initialization
+        this.isInitialized = true;
     }
     
     /**
@@ -187,6 +307,11 @@ class EntityManager {
      * @returns {EntityManager} This manager for chaining
      */
     addEntity(entity) {
+        if (!entity || !entity.id) {
+            console.error('Invalid entity provided to EntityManager.addEntity');
+            return this;
+        }
+        
         this.entities.set(entity.id, entity);
         return this;
     }
@@ -206,7 +331,7 @@ class EntityManager {
      * @returns {Array} Array of entities with tag
      */
     getEntitiesByTag(tag) {
-        return this.taggedEntities.get(tag) || [];
+        return Array.from(this.taggedEntities.get(tag) || []);
     }
     
     /**
@@ -216,7 +341,7 @@ class EntityManager {
      */
     getEntitiesByComponent(ComponentClass) {
         const componentName = ComponentClass.name;
-        return this.componentEntities.get(componentName) || [];
+        return Array.from(this.componentEntities.get(componentName) || []);
     }
     
     /**
@@ -233,15 +358,14 @@ class EntityManager {
      * @param {string} tag - Tag to register
      */
     registerTag(entity, tag) {
+        if (!entity || !tag) return;
+        
         if (!this.taggedEntities.has(tag)) {
-            this.taggedEntities.set(tag, []);
+            this.taggedEntities.set(tag, new Set());
         }
         
-        // Add entity to tag list if not already present
         const entities = this.taggedEntities.get(tag);
-        if (!entities.includes(entity)) {
-            entities.push(entity);
-        }
+        entities.add(entity);
     }
     
     /**
@@ -250,21 +374,18 @@ class EntityManager {
      * @param {string} tag - Tag to unregister
      */
     unregisterTag(entity, tag) {
+        if (!entity || !tag) return;
+        
         if (!this.taggedEntities.has(tag)) {
             return;
         }
         
-        // Remove entity from tag list
         const entities = this.taggedEntities.get(tag);
-        const index = entities.indexOf(entity);
+        entities.delete(entity);
         
-        if (index !== -1) {
-            entities.splice(index, 1);
-            
-            // Remove empty tag lists
-            if (entities.length === 0) {
-                this.taggedEntities.delete(tag);
-            }
+        // Remove empty tag sets
+        if (entities.size === 0) {
+            this.taggedEntities.delete(tag);
         }
     }
     
@@ -274,15 +395,14 @@ class EntityManager {
      * @param {string} componentName - Component name to register
      */
     registerComponent(entity, componentName) {
+        if (!entity || !componentName) return;
+        
         if (!this.componentEntities.has(componentName)) {
-            this.componentEntities.set(componentName, []);
+            this.componentEntities.set(componentName, new Set());
         }
         
-        // Add entity to component list if not already present
         const entities = this.componentEntities.get(componentName);
-        if (!entities.includes(entity)) {
-            entities.push(entity);
-        }
+        entities.add(entity);
     }
     
     /**
@@ -291,21 +411,18 @@ class EntityManager {
      * @param {string} componentName - Component name to unregister
      */
     unregisterComponent(entity, componentName) {
+        if (!entity || !componentName) return;
+        
         if (!this.componentEntities.has(componentName)) {
             return;
         }
         
-        // Remove entity from component list
         const entities = this.componentEntities.get(componentName);
-        const index = entities.indexOf(entity);
+        entities.delete(entity);
         
-        if (index !== -1) {
-            entities.splice(index, 1);
-            
-            // Remove empty component lists
-            if (entities.length === 0) {
-                this.componentEntities.delete(componentName);
-            }
+        // Remove empty component sets
+        if (entities.size === 0) {
+            this.componentEntities.delete(componentName);
         }
     }
     
@@ -360,9 +477,15 @@ class EntityManager {
      * Clear all entities
      */
     clear() {
-        // Clean up all entities
-        for (const entity of this.entities.values()) {
-            entity.destroy();
+        // First make a copy of all entity IDs to avoid modification during iteration
+        const entityIds = Array.from(this.entities.keys());
+        
+        // Then destroy each entity
+        for (const entityId of entityIds) {
+            const entity = this.entities.get(entityId);
+            if (entity && typeof entity.destroy === 'function') {
+                entity.destroy();
+            }
         }
         
         // Clear all maps
@@ -370,7 +493,37 @@ class EntityManager {
         this.taggedEntities.clear();
         this.componentEntities.clear();
     }
+    
+    /**
+     * Get singleton instance
+     * @returns {EntityManager} The singleton instance
+     */
+    static getInstance() {
+        return EntityManager.instance || new EntityManager();
+    }
 }
 
-// Create singleton instance
-export const entityManager = new EntityManager(); 
+// Initialize the static instance property
+EntityManager.instance = null;
+
+/**
+ * Get the entity manager singleton instance
+ * @returns {EntityManager} The entity manager instance
+ */
+function getEntityManagerInstance() {
+    // Check global window first (for backward compatibility)
+    if (typeof window !== 'undefined' && window.entityManager) {
+        return window.entityManager;
+    }
+    
+    // Otherwise use the singleton instance
+    return EntityManager.getInstance();
+}
+
+// Create and export singleton instance
+export const entityManager = EntityManager.getInstance();
+
+// For backward compatibility, set on window if in browser context
+if (typeof window !== 'undefined') {
+    window.entityManager = entityManager;
+} 

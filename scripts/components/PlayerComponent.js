@@ -3,15 +3,18 @@
  * Handles player state, movement, actions, and evolution
  */
 import { TileComponent } from './TileComponent.js';
-import { entityManager } from '../core/EntityManager.js';
+import { entityManager, Component } from '../core/EntityManager.js';
 
-export class PlayerComponent {
+export class PlayerComponent extends Component {
     /**
      * Create a new player component
+     * @param {Entity} entity - The entity this component belongs to
      * @param {number} startRow - Starting grid row position
      * @param {number} startCol - Starting grid column position 
      */
-    constructor(startRow = 0, startCol = 0) {
+    constructor(entity, startRow = 0, startCol = 0) {
+        super(entity);
+        
         // Position
         this.row = startRow;
         this.col = startCol;
@@ -31,13 +34,18 @@ export class PlayerComponent {
         
         // Action state
         this.currentAction = null;
-        this.markerElement = null;
         
         // Stats tracking
         this.tilesExplored = 0;
         this.movesMade = 0;
         this.actionsPerformed = 0;
         this.turnsCompleted = 0;
+        
+        // DOM elements
+        this.markerElement = null;
+        
+        // Event listeners
+        this.boundEventListeners = {};
         
         // Bind methods that will be used as event handlers
         this.updateMarkerPosition = this.updateMarkerPosition.bind(this);
