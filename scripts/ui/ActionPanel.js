@@ -8,24 +8,18 @@ import { entityManager } from '../core/EntityManager.js';
 
 export class ActionPanel {
     /**
-     * Create a new ActionPanel
-     * @param {Object} options - Configuration options
-     * @param {Object} options.turnSystem - The turn system to use (optional)
-     * @param {Object} options.grid - The grid system to use (optional)
+     * Create a new action panel
+     * @param {Object} options - Initialization options
+     * @param {Object} options.turnSystem - Turn system for the panel
+     * @param {Object} options.grid - Grid system for the panel
      */
     constructor(options = {}) {
         // Store dependencies
         this.turnSystem = options.turnSystem || null;
         this.grid = options.grid || null;
         
-        // Action buttons
-        this.buttons = {
-            move: document.getElementById('move-btn'),
-            sense: document.getElementById('sense-btn'),
-            interact: document.getElementById('interact-btn'),
-            stabilize: document.getElementById('stabilize-btn'),
-            endTurn: document.getElementById('end-turn-btn')
-        };
+        // Action buttons - initialize as empty object, will be populated in init()
+        this.buttons = {};
         
         // Message system for feedback
         this.messageSystem = null;
@@ -42,14 +36,24 @@ export class ActionPanel {
     
     /**
      * Initialize the action panel
-     * @param {MessageSystem} messageSystem - The message system for feedback
-     * @param {Object} options - Additional initialization options
-     * @param {Object} options.turnSystem - The turn system to use (optional)
-     * @param {Object} options.grid - The grid system to use (optional)
+     * @param {Object} messageSystem - Message system to use
+     * @param {Object} options - Options for initialization
+     * @param {Object} options.grid - Grid system to use
+     * @param {Object} options.turnSystem - Turn system to use
      */
     init(messageSystem, options = {}) {
         console.log("Initializing action panel");
         
+        // Clean up any previous initialization first
+        this.destroy();
+        
+        // Reset click handlers
+        this.clickHandlers = {};
+        
+        // Reset registered events
+        this._registeredEvents = [];
+        
+        // Set new dependencies
         this.messageSystem = messageSystem;
         
         // Set turn system if provided
@@ -62,17 +66,61 @@ export class ActionPanel {
             this.grid = options.grid;
         }
         
+        // Ensure we have access to the entity manager
+        this.entityManager = window.game ? window.game.entityManager : null;
+        
+        // Get fresh references to DOM buttons
+        this.buttons = {
+            move: document.getElementById('move-btn'),
+            sense: document.getElementById('sense-btn'),
+            interact: document.getElementById('interact-btn'),
+            stabilize: document.getElementById('stabilize-btn'),
+            endTurn: document.getElementById('end-turn-btn')
+        };
+        
+        console.log("ActionPanel initialized with dependencies:", {
+            messageSystem: !!this.messageSystem,
+            turnSystem: !!this.turnSystem, 
+            grid: !!this.grid,
+            entityManager: !!this.entityManager,
+            buttons: Object.keys(this.buttons).filter(k => !!this.buttons[k])
+        });
+        
         // Set up button listeners
         this.setupButtonListeners();
         
         // Register game events
         this.registerEventListeners();
+        
+        // Reset the current action
+        this.currentAction = null;
     }
     
     /**
      * Set up button click listeners
      */
     setupButtonListeners() {
+        console.log("Setting up ActionPanel button listeners");
+        
+        // First, remove any existing listeners by cloning the buttons
+        for (const actionType in this.buttons) {
+            if (this.buttons[actionType]) {
+                // Store reference to the original button
+                const originalButton = this.buttons[actionType];
+                
+                // Clone the button to remove all event listeners
+                const newButton = originalButton.cloneNode(true);
+                if (originalButton.parentNode) {
+                    originalButton.parentNode.replaceChild(newButton, originalButton);
+                }
+                
+                // Update our reference
+                this.buttons[actionType] = newButton;
+                
+                console.log(`Cleaned up listeners for ${actionType} button`);
+            }
+        }
+        
         // Move button
         if (this.buttons.move) {
             this.clickHandlers.move = () => this.handleActionButtonClick('move');
@@ -145,8 +193,28 @@ export class ActionPanel {
     handleActionButtonClick(action) {
         console.log(`Action button clicked: ${action}`);
         
+        // Handle null action - used when clearing action programmatically
+        if (action === null) {
+            // Find the player component
+            const playerEntity = this.entityManager ? this.entityManager.getEntitiesByTag('player')[0] : null;
+            if (playerEntity) {
+                const playerComponent = playerEntity.getComponent(PlayerComponent);
+                if (playerComponent) {
+                    playerComponent.setAction(null);
+                    this.currentAction = null;
+                    this.updateButtonStates();
+                }
+            }
+            return;
+        }
+        
         // Get player entity
-        const playerEntity = entityManager.getEntitiesByTag('player')[0];
+        if (!this.entityManager) {
+            console.error("Entity manager not available in ActionPanel");
+            return;
+        }
+        
+        const playerEntity = this.entityManager.getEntitiesByTag('player')[0];
         if (!playerEntity) {
             console.error("Player entity not found");
             return;
@@ -194,7 +262,7 @@ export class ActionPanel {
         this.currentAction = null;
         
         // Also clear it in the PlayerComponent
-        const playerEntity = entityManager.getEntitiesByTag('player')[0];
+        const playerEntity = this.entityManager ? this.entityManager.getEntitiesByTag('player')[0] : null;
         if (playerEntity) {
             const playerComponent = playerEntity.getComponent(PlayerComponent);
             if (playerComponent) {
@@ -239,7 +307,7 @@ export class ActionPanel {
         console.log(`Tile clicked: (${data.row}, ${data.col})`);
         
         // Get player entity
-        const playerEntity = entityManager.getEntitiesByTag('player')[0];
+        const playerEntity = this.entityManager ? this.entityManager.getEntitiesByTag('player')[0] : null;
         if (!playerEntity) {
             console.error("Player entity not found");
             return;
@@ -286,8 +354,16 @@ export class ActionPanel {
      * @param {number} chaosDelta - Change in chaos level
      */
     updateSystemBalance(chaosDelta) {
+        // Validate input to prevent NaN or invalid values
+        if (typeof chaosDelta !== 'number' || isNaN(chaosDelta)) {
+            console.warn("ActionPanel.updateSystemBalance: Invalid chaosDelta:", chaosDelta);
+            return;
+        }
+        
         if (this.grid) {
-            this.grid.updateSystemBalance(chaosDelta / 10); // Reduced effect on whole system
+            // Apply reduced effect for better gameplay balance
+            const scaledDelta = chaosDelta / 10; 
+            this.grid.updateSystemBalance(scaledDelta);
         } else {
             console.error("ActionPanel: Grid not available. Could not update system balance.");
         }
@@ -328,7 +404,7 @@ export class ActionPanel {
         }
         
         // Get target tile entity
-        const tileEntity = entityManager.getEntitiesByTag(`tile_${row}_${col}`)[0];
+        const tileEntity = this.entityManager ? this.entityManager.getEntitiesByTag(`tile_${row}_${col}`)[0] : null;
         if (!tileEntity) {
             console.error(`No tile entity found at (${row}, ${col})`);
             return;
@@ -517,11 +593,12 @@ export class ActionPanel {
         // Mark tile as explored
         tileComponent.markExplored();
         
-        // Random effect
-        const rand = Math.random();
         let feedbackMessage = "";
         
-        if (rand < 0.3) {
+        // Random effect - slightly biased towards increasing chaos to make it easier to gain chaos points
+        const rand = Math.random();
+        
+        if (rand < 0.2) {
             // Reduce chaos
             const oldChaos = tileComponent.chaos;
             const newChaos = Math.max(0, oldChaos - 0.1 - Math.random() * 0.1);
@@ -531,16 +608,16 @@ export class ActionPanel {
             this.updateSystemBalance(newChaos - oldChaos);
             
             feedbackMessage = `Interaction reduced chaos slightly`;
-        } else if (rand < 0.6) {
+        } else if (rand < 0.7) {  // Increased from 0.6 to 0.7 - more chance to increase chaos
             // Increase chaos
             const oldChaos = tileComponent.chaos;
-            const newChaos = Math.min(1, oldChaos + 0.1 + Math.random() * 0.1);
+            const newChaos = Math.min(1, oldChaos + 0.15 + Math.random() * 0.15);  // Increased from 0.1 to 0.15 for both base and random
             tileComponent.updateChaosLevel(newChaos - oldChaos);
             
             // Update system balance
             this.updateSystemBalance(newChaos - oldChaos);
             
-            feedbackMessage = `Interaction increased chaos slightly`;
+            feedbackMessage = `Interaction increased chaos significantly`;
         } else {
             // Change tile type
             const tileTypes = ['normal', 'forest', 'mountain', 'desert'];
@@ -651,7 +728,7 @@ export class ActionPanel {
      */
     updateButtonStates() {
         // Get player component
-        const playerEntity = entityManager.getEntitiesByTag('player')[0];
+        const playerEntity = this.entityManager ? this.entityManager.getEntitiesByTag('player')[0] : null;
         if (!playerEntity) return;
         
         const playerComponent = playerEntity.getComponent(PlayerComponent);
@@ -709,6 +786,7 @@ export class ActionPanel {
      * @returns {string} Formatted action name
      */
     formatActionName(action) {
+        if (!action) return 'No';
         return action.charAt(0).toUpperCase() + action.slice(1);
     }
     
@@ -721,7 +799,7 @@ export class ActionPanel {
         this.currentAction = null;
         
         // Also ensure the PlayerComponent's action is reset
-        const playerEntity = entityManager.getEntitiesByTag('player')[0];
+        const playerEntity = this.entityManager ? this.entityManager.getEntitiesByTag('player')[0] : null;
         if (playerEntity) {
             const playerComponent = playerEntity.getComponent(PlayerComponent);
             if (playerComponent) {
@@ -756,24 +834,40 @@ export class ActionPanel {
     destroy() {
         console.log("Destroying action panel");
         
-        // Remove event listeners
-        for (let i = 0; i < this._registeredEvents.length; i++) {
-            eventSystem.off(this._registeredEvents[i]);
-        }
-        this._registeredEvents = [];
+        // Reset action selection state
+        this.currentAction = null;
         
-        // Remove button listeners
-        for (const action in this.clickHandlers) {
-            const button = this.buttons[action];
-            if (button && this.clickHandlers[action]) {
-                button.removeEventListener('click', this.clickHandlers[action]);
+        // Remove game event listeners
+        if (Array.isArray(this._registeredEvents)) {
+            for (const registration of this._registeredEvents) {
+                if (registration) {
+                    eventSystem.off(registration);
+                }
+            }
+            this._registeredEvents = [];
+        }
+        
+        // Safer approach - clone all buttons to remove any event listeners
+        for (const actionType in this.buttons) {
+            if (this.buttons[actionType] && this.buttons[actionType].parentNode) {
+                const originalButton = this.buttons[actionType];
+                const newButton = originalButton.cloneNode(true);
+                originalButton.parentNode.replaceChild(newButton, originalButton);
+                
+                // Update our reference
+                this.buttons[actionType] = newButton;
             }
         }
+        
+        // Also clear clickHandlers for good measure
         this.clickHandlers = {};
         
-        // Clear global reference
-        if (window.actionPanel === this) {
-            window.actionPanel = null;
-        }
+        // Clear references to systems
+        this.messageSystem = null;
+        this.turnSystem = null;
+        this.grid = null;
+        this.entityManager = null;
+        
+        console.log("Action panel destroyed successfully");
     }
 } 

@@ -341,7 +341,10 @@ export class PlayerComponent {
         }
         
         // Check if we already have this trait
-        if (this.traits.some(t => t && t.id === trait.id)) return false;
+        if (this.traits.some(t => t && t.id === trait.id)) {
+            console.log(`PlayerComponent: Player already has trait ${trait.id}, not adding again`);
+            return false;
+        }
         
         // Add trait
         this.traits.push(trait);
@@ -355,6 +358,7 @@ export class PlayerComponent {
             trait: trait
         });
         
+        console.log(`PlayerComponent: Added trait ${trait.id} (${trait.name})`);
         return true;
     }
     
@@ -363,53 +367,68 @@ export class PlayerComponent {
      * @param {Object} trait - Trait to apply effects from
      */
     applyTraitEffects(trait) {
+        console.log(`PlayerComponent: Applying effects from trait ${trait.id} (${trait.name})`);
+        
         // Apply stat changes
         if (trait.effects) {
-            if (trait.effects.maxEnergy) this.maxEnergy += trait.effects.maxEnergy;
-            if (trait.effects.maxMovementPoints) this.maxMovementPoints += trait.effects.maxMovementPoints;
+            if (trait.effects.maxEnergy) {
+                this.maxEnergy += trait.effects.maxEnergy;
+                console.log(`PlayerComponent: Applied maxEnergy effect: +${trait.effects.maxEnergy}`);
+            }
+            if (trait.effects.maxMovementPoints) {
+                this.maxMovementPoints += trait.effects.maxMovementPoints;
+                console.log(`PlayerComponent: Applied maxMovementPoints effect: +${trait.effects.maxMovementPoints}`);
+            }
             
             // Refill to new max
             this.energy = this.maxEnergy;
             this.movementPoints = this.maxMovementPoints;
         }
+        
+        // Apply onAcquire effect if it exists (and is a function)
+        if (trait.onAcquire && typeof trait.onAcquire === 'function') {
+            try {
+                trait.onAcquire(this);
+                console.log(`PlayerComponent: Successfully executed onAcquire function for trait ${trait.id}`);
+            } catch (error) {
+                console.error(`PlayerComponent: Error executing onAcquire function for trait ${trait.id}:`, error);
+            }
+        }
     }
     
     /**
      * Add evolution points of a specific type
-     * @param {string} type - Type of evolution points ('chaos', 'flow', or 'order')
-     * @param {number} amount - Amount of points to add
-     * @param {boolean} [suppressEvent=false] - Whether to suppress the event emission
+     * @param {string} type - Type of points (chaos, flow, order)
+     * @param {number} amount - Amount to add
+     * @param {boolean} suppressEvent - Whether to suppress event emission
      */
     addEvolutionPoints(type, amount, suppressEvent = false) {
-        if (amount <= 0) return;
-        
-        switch (type) {
-            case 'chaos':
-                this.chaosEvolutionPoints += amount;
-                break;
-            case 'flow':
-                this.flowEvolutionPoints += amount;
-                break;
-            case 'order':
-                this.orderEvolutionPoints += amount;
-                break;
-            default:
-                // Legacy support for general evolution points
-                this.evolutionPoints += amount;
-                break;
+        // Validate input
+        if (amount <= 0) {
+            return;
         }
         
-        // For backwards compatibility, also update total points
-        this.evolutionPoints = this.chaosEvolutionPoints + this.flowEvolutionPoints + this.orderEvolutionPoints;
+        // Add points based on type
+        if (type === 'chaos') {
+            this.chaosEvolutionPoints += amount;
+        } else if (type === 'flow') {
+            this.flowEvolutionPoints += amount;
+        } else if (type === 'order') {
+            this.orderEvolutionPoints += amount;
+        } else {
+            // Legacy support
+            this.evolutionPoints += amount;
+        }
         
-        // Only emit the event if not suppressed
-        // This allows TurnSystem to add points without triggering duplicate events
-        if (!suppressEvent) {
-            // Emit an event about the evolution points change
-            eventSystem.emit('playerEvolutionPointsChanged', {
+        // Update total - make sure individual categories are included
+        this.evolutionPoints = (this.chaosEvolutionPoints || 0) + 
+                             (this.flowEvolutionPoints || 0) + 
+                             (this.orderEvolutionPoints || 0);
+        
+        // Emit event unless suppressed
+        if (!suppressEvent && window.eventSystem) {
+            window.eventSystem.emit('playerEvolutionPointsChanged', {
                 player: this,
-                type: type,
-                amount: amount,
                 chaosPoints: this.chaosEvolutionPoints,
                 flowPoints: this.flowEvolutionPoints,
                 orderPoints: this.orderEvolutionPoints,
@@ -417,7 +436,7 @@ export class PlayerComponent {
             });
         }
         
-        console.log(`Added ${amount} ${type} evolution points. Total ${type}: ${this[type + 'EvolutionPoints']}`);
+        console.log(`Added ${amount} ${type} evolution points. New total: ${this.evolutionPoints}`);
     }
     
     /**
@@ -554,7 +573,7 @@ export class PlayerComponent {
      * This is useful when restoring traits after level transitions
      */
     applyAllTraitEffects() {
-        console.log(`Applying effects from ${this.traits ? this.traits.length : 0} traits...`);
+        console.log(`PlayerComponent: Applying effects from ${this.traits ? this.traits.length : 0} traits...`);
         
         // Ensure traits is initialized
         if (!this.traits) {
@@ -571,28 +590,28 @@ export class PlayerComponent {
         for (const trait of this.traits) {
             if (!trait) continue; // Skip null or undefined traits
             
-            console.log(`Applying effects from trait: ${trait.name} (${trait.id})`);
+            console.log(`PlayerComponent: Applying effects from trait: ${trait.name} (${trait.id})`);
+            
+            // Apply static effects first
+            if (trait.effects) {
+                if (trait.effects.maxEnergy) {
+                    this.maxEnergy += trait.effects.maxEnergy;
+                    console.log(`PlayerComponent: Applied maxEnergy effect: +${trait.effects.maxEnergy}`);
+                }
+                
+                if (trait.effects.maxMovementPoints) {
+                    this.maxMovementPoints += trait.effects.maxMovementPoints;
+                    console.log(`PlayerComponent: Applied maxMovementPoints effect: +${trait.effects.maxMovementPoints}`);
+                }
+            }
             
             // Apply immediate effects if any
             if (trait.onAcquire && typeof trait.onAcquire === 'function') {
                 try {
                     trait.onAcquire(this);
-                    console.log(`Successfully applied onAcquire effect for trait: ${trait.name}`);
+                    console.log(`PlayerComponent: Successfully applied onAcquire effect for trait: ${trait.name}`);
                 } catch (error) {
-                    console.error(`Error applying onAcquire effect for trait: ${trait.name}`, error);
-                }
-            }
-            
-            // Apply static effects
-            if (trait.effects) {
-                if (trait.effects.maxEnergy) {
-                    this.maxEnergy += trait.effects.maxEnergy;
-                    console.log(`Applied maxEnergy effect: +${trait.effects.maxEnergy}`);
-                }
-                
-                if (trait.effects.maxMovementPoints) {
-                    this.maxMovementPoints += trait.effects.maxMovementPoints;
-                    console.log(`Applied maxMovementPoints effect: +${trait.effects.maxMovementPoints}`);
+                    console.error(`PlayerComponent: Error applying onAcquire effect for trait: ${trait.name}`, error);
                 }
             }
         }
@@ -601,29 +620,16 @@ export class PlayerComponent {
         this.energy = this.maxEnergy;
         this.movementPoints = this.maxMovementPoints;
         
-        console.log(`Applied effects from ${this.traits.length} traits. New stats: Energy=${this.maxEnergy}, Movement=${this.maxMovementPoints}`);
-    }
-    
-    /**
-     * Add a trait without applying its effects immediately
-     * Useful for when we want to add multiple traits and apply their effects all at once
-     * @param {Object} trait - Trait to add
-     * @returns {boolean} Whether trait was added successfully
-     */
-    addTraitWithoutEffect(trait) {
-        // Check if we already have this trait
-        if (this.traits.some(t => t.id === trait.id)) return false;
-        
-        // Add trait to the array
-        this.traits.push(trait);
-        
-        // Emit trait added event
-        eventSystem.emit('playerTraitAdded', {
+        // Emit stats updated event
+        eventSystem.emit('playerStatsUpdated', {
             player: this,
-            trait: trait
+            maxEnergy: this.maxEnergy,
+            maxMovementPoints: this.maxMovementPoints,
+            energy: this.energy,
+            movementPoints: this.movementPoints
         });
         
-        return true;
+        console.log(`PlayerComponent: Applied effects from ${this.traits.length} traits. New stats: Energy=${this.maxEnergy}, Movement=${this.maxMovementPoints}`);
     }
     
     /**

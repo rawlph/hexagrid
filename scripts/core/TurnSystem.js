@@ -403,7 +403,7 @@ export class TurnSystem {
         // Parameters for points distribution
         const perfectBalance = 0.5;          // 50% chaos is perfect balance
         const balanceThreshold = 0.05;       // ±5% around 50% is considered balanced
-        const specializationThreshold = 0.55; // Beyond 55% chaos or order starts specialization
+        const specializationThreshold = 0.52; // Lower threshold to 52% (from 55%) for chaos/order specialization
         
         // Calculate balance deviation from perfect 50/50
         const balanceDeviation = Math.abs(chaos - perfectBalance);
@@ -421,15 +421,15 @@ export class TurnSystem {
             flowPoints = Math.max(1, Math.round(flowBase * multiplier)); // Minimum 1 flow point
         }
         
-        // Calculate chaos points - only when chaos > 55%
+        // Calculate chaos points - only when chaos > specializationThreshold
         if (chaos > specializationThreshold) {
             // How far into chaos territory we are
             const chaosDepth = chaos - specializationThreshold;
             // More chaos = more chaos points, up to 8 at 100% chaos
-            chaosPoints = Math.round((chaosDepth * 18) * multiplier);
+            chaosPoints = Math.round((chaosDepth * 20) * multiplier); // Increased multiplier from 18 to 20
         }
         
-        // Calculate order points - only when order > 55% (chaos < 45%)
+        // Calculate order points - only when order > specializationThreshold
         if (order > specializationThreshold) {
             // How far into order territory we are
             const orderDepth = order - specializationThreshold;

@@ -170,6 +170,24 @@ export class EventSystem {
     }
     
     /**
+     * Remove all listeners for a specific event type
+     * @param {string} eventType - Type of event to remove listeners for
+     * @returns {boolean} Whether any listeners were removed
+     */
+    removeAllListeners(eventType) {
+        // Check if we have listeners for this event type
+        if (!this.listeners[eventType]) return false;
+        
+        // Remove all registrations for this event type
+        this.registrations = this.registrations.filter(reg => reg.eventType !== eventType);
+        
+        // Remove all listeners for this event type
+        delete this.listeners[eventType];
+        
+        return true;
+    }
+    
+    /**
      * Set debug mode
      * @param {boolean} enabled - Whether to enable debug mode
      */

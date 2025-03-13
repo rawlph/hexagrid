@@ -508,4 +508,67 @@ export class MetricsSystem {
         
         this._registeredEvents = [];
     }
+    
+    /**
+     * Get all metrics data for saving
+     * @returns {Object} Complete metrics data
+     */
+    getData() {
+        return {
+            // Movement metrics
+            movesMade: this.movesMade,
+            tilesExplored: this.tilesExplored,
+            totalDistanceMoved: this.totalDistanceMoved,
+            
+            // Resource metrics
+            energyUsed: this.energyUsed,
+            energyGained: this.energyGained,
+            movementPointsUsed: this.movementPointsUsed,
+            
+            // Action metrics
+            sensesPerformed: this.sensesPerformed,
+            interactionsPerformed: this.interactionsPerformed,
+            stabilizationsPerformed: this.stabilizationsPerformed,
+            
+            // Chaos metrics
+            chaosCreated: this.chaosCreated,
+            chaosReduced: this.chaosReduced,
+            netChaosChange: this.netChaosChange,
+            
+            // Game metrics
+            turnsTaken: this.turnsTaken,
+            averageActionsPerTurn: this.averageActionsPerTurn,
+            levelsCompleted: this.levelsCompleted,
+            totalPlayTime: this.totalPlayTime,
+            
+            // Evolution metrics
+            evolutionPointsEarned: this.evolutionPointsEarned,
+            traitsAcquired: this.traitsAcquired,
+            
+            // Ratings
+            explorerRating: this.explorerRating,
+            balancerRating: this.balancerRating,
+            efficientRating: this.efficientRating,
+            
+            // Achievements
+            achievements: JSON.parse(JSON.stringify(this.achievements))
+        };
+    }
+    
+    /**
+     * Set metrics data from saved data
+     * @param {Object} data - Data from getData()
+     */
+    setData(data) {
+        if (!data) return;
+        
+        // Copy all metrics data from the saved object
+        Object.keys(data).forEach(key => {
+            if (typeof data[key] !== 'undefined') {
+                this[key] = data[key];
+            }
+        });
+        
+        console.log('MetricsSystem: Restored metrics data');
+    }
 } 

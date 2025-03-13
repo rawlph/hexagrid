@@ -249,27 +249,71 @@ export class EvolutionSystem {
         // Get the player
         const playerEntity = entityManager.getEntitiesByTag('player')[0];
         if (!playerEntity) {
-            console.error("Player entity not found for trait application");
+            console.error("Cannot find player entity to apply trait");
             return false;
         }
         
-        const playerComponent = playerEntity.getComponent(PlayerComponent);
-        if (!playerComponent) {
-            console.error("Player component not found for trait application");
+        // Get player component
+        try {
+            const PlayerComponentClass = window.PlayerComponent || 
+                (typeof PlayerComponent !== 'undefined' ? PlayerComponent : null);
+                
+            if (!PlayerComponentClass) {
+                console.error("PlayerComponent class is not available");
+                return false;
+            }
+            
+            const playerComponent = playerEntity.getComponent(PlayerComponentClass);
+            if (!playerComponent) {
+                console.error("Player entity does not have PlayerComponent");
+                return false;
+            }
+            
+            // Add trait to player using the proper method
+            const added = playerComponent.addTrait(trait);
+            
+            // Emit trait purchased event regardless of whether the trait was added
+            // (if the player already has the trait, we still deducted points)
+            eventSystem.emit('traitPurchased', {
+                trait: trait,
+                player: playerComponent
+            });
+            
+            return added;
+        } catch (error) {
+            console.error("Error applying trait to player:", error);
+            return false;
+        }
+    }
+    
+    /**
+     * Acquire a trait for a specific player component
+     * @param {Object} trait - The trait to acquire
+     * @param {PlayerComponent} playerComponent - The player component to apply the trait to
+     * @returns {boolean} Whether the trait was successfully acquired
+     */
+    acquireTrait(trait, playerComponent) {
+        if (!trait || !playerComponent) {
+            console.error("Cannot acquire trait: missing trait or player component");
             return false;
         }
         
-        // Add trait to player
-        playerComponent.addTrait(trait);
+        // Add trait to player - use the consistent addTrait method
+        const added = playerComponent.addTrait(trait);
         
-        // Emit event
-        eventSystem.emit('traitPurchased', {
-            traitId: traitId,
-            trait: trait,
-            remainingPoints: this.availablePoints
-        });
+        // Mark the trait as acquired in our tracking
+        if (added && trait.id) {
+            this.acquiredTraits[trait.id] = true;
+        }
         
-        return true;
+        // If player already had the trait, we'll get false from addTrait,
+        // but we should still mark it as acquired in our tracking system
+        if (!added && trait.id && !this.acquiredTraits[trait.id]) {
+            this.acquiredTraits[trait.id] = true;
+            console.log(`Evolution System: Marked trait ${trait.id} as acquired (player already had it)`);
+        }
+        
+        return added;
     }
     
     /**

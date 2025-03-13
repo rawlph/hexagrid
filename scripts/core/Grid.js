@@ -38,6 +38,60 @@ export class Grid {
     }
     
     /**
+     * Initialize the grid
+     * @returns {boolean} Whether initialization was successful
+     */
+    init() {
+        try {
+            console.log(`Initializing grid with ${this.rows}x${this.cols} dimensions`);
+            
+            // Create grid element if not already created
+            if (!this.gridElement) {
+                this.gridElement = document.createElement('div');
+                this.gridElement.className = 'hex-grid';
+                this.container.appendChild(this.gridElement);
+            } else {
+                // Clear existing grid
+                this.gridElement.innerHTML = '';
+            }
+            
+            // Set the initial balance based on game stage
+            this.setGameStageBalance(this.gameStage);
+            
+            // Generate tiles
+            this.generateTiles();
+            
+            // Adjust grid layout based on container size
+            this.adjustGridLayout();
+            
+            // Add window resize listener
+            window.addEventListener('resize', this.handleResize);
+            
+            // Emit grid initialized event
+            eventSystem.emit('gridInitialized', {
+                rows: this.rows,
+                cols: this.cols,
+                gameStage: this.gameStage
+            });
+            
+            // Emit the initial balance state
+            eventSystem.emit('systemBalanceChanged', {
+                chaos: this.systemChaos,
+                order: this.systemOrder,
+                systemChaos: this.systemChaos,
+                systemOrder: this.systemOrder,
+                chaosDelta: 0
+            });
+            
+            console.log(`Grid initialized with ${this.rows}x${this.cols} tiles`);
+            return true;
+        } catch (error) {
+            console.error("Failed to initialize grid:", error);
+            return false;
+        }
+    }
+    
+    /**
      * Set initial balance based on game stage
      * @param {string} gameStage - Game stage (early, mid, late)
      */
@@ -57,7 +111,14 @@ export class Grid {
                 this.systemChaos = 0.8;
                 this.systemOrder = 0.2;
                 break;
+                
+            default:
+                // Default to 60/40 split
+                this.systemChaos = 0.6;
+                this.systemOrder = 0.4;
         }
+        
+        console.log(`Grid: Set initial balance for ${gameStage} stage - Chaos: ${this.systemChaos.toFixed(2)}, Order: ${this.systemOrder.toFixed(2)}`);
     }
     
     /**
@@ -387,6 +448,12 @@ export class Grid {
      * @returns {Object} New system balance
      */
     updateSystemBalance(chaosDelta) {
+        // Ensure chaosDelta is a valid number
+        if (typeof chaosDelta !== 'number' || isNaN(chaosDelta)) {
+            console.warn("Grid.updateSystemBalance: Invalid chaosDelta value:", chaosDelta);
+            chaosDelta = 0;
+        }
+        
         // Store old values
         const oldChaos = this.systemChaos;
         const oldOrder = this.systemOrder;
@@ -395,13 +462,16 @@ export class Grid {
         this.systemChaos = utils.clamp(this.systemChaos + chaosDelta, 0, 1);
         this.systemOrder = 1 - this.systemChaos;
         
-        // Emit change event
+        // Emit change event with consistent property names
         eventSystem.emit('systemBalanceChanged', {
             oldChaos,
             oldOrder,
             systemChaos: this.systemChaos,
             systemOrder: this.systemOrder,
-            chaosDelta
+            chaosDelta,
+            // Include simple property names for consistency
+            chaos: this.systemChaos,
+            order: this.systemOrder
         });
         
         return this.getSystemBalance();
@@ -457,5 +527,24 @@ export class Grid {
         
         // Clear tiles array
         this.tiles = [];
+    }
+    
+    /**
+     * Generate tiles for the grid
+     * This method delegates to initializeGrid for the actual tile generation
+     */
+    generateTiles() {
+        console.log(`Generating tiles for ${this.rows}x${this.cols} grid`);
+        return this.initializeGrid();
+    }
+    
+    /**
+     * Adjust grid layout based on container size
+     */
+    adjustGridLayout() {
+        if (!this.gridElement) return;
+        
+        // Set container size
+        this.setContainerSize();
     }
 } 

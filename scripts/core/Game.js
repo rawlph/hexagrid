@@ -4,6 +4,13 @@
  */
 import { MetricsSystem } from '../systems/MetricsSystem.js';
 import { UIManager } from '../ui/UIManager.js';
+import { EvolutionSystem } from '../systems/EvolutionSystem.js';
+import { TileComponent } from '../components/TileComponent.js';
+import { PlayerComponent } from '../components/PlayerComponent.js';
+import { Grid } from './Grid.js';
+import { TurnSystem } from './TurnSystem.js';
+import { entityManager } from './EntityManager.js';
+import { eventSystem } from './EventSystem.js';
 
 export class Game {
     /**
@@ -35,6 +42,9 @@ export class Game {
         // Core systems
         this.grid = null;
         this.turnSystem = null;
+        this.evolutionSystem = null;
+        this.uiManager = null;
+        this.metricsSystem = null;
         
         // Game state
         this.isInitialized = false;
@@ -43,17 +53,23 @@ export class Game {
         this.update = this.update.bind(this);
         this.handleTileClick = this.handleTileClick.bind(this);
         this.endTurn = this.endTurn.bind(this);
+        
+        // Event registration tracking
+        this._registeredEvents = [];
+        
+        // Cache for level completion data for transitions between levels
+        this.currentCompletionData = null;
     }
     
     /**
      * Initialize the game
-     * @param {number} rows - Number of rows in the grid
-     * @param {number} cols - Number of columns in the grid
-     * @param {string} gameStage - Current game stage (early, mid, late)
+     * @param {number} rows - Number of grid rows
+     * @param {number} cols - Number of grid columns
+     * @param {string} gameStage - Game stage (early, mid, late) 
      * @returns {boolean} - Whether initialization was successful
      */
-    init(rows = this.config.defaultGridSize, cols = this.config.defaultGridSize, gameStage = this.config.defaultGameStage) {
-        console.log(`Initializing game with grid size ${rows}x${cols}, stage: ${gameStage}`);
+    init(rows = this.config.defaultGridSize, cols = this.config.defaultGridSize, gameStage = 'early') {
+        console.log(`Initializing game with ${rows}x${cols} grid at ${gameStage} stage`);
         
         try {
             // Check critical dependencies before proceeding
@@ -61,24 +77,37 @@ export class Game {
                 throw new Error('Cannot initialize game: missing critical dependencies');
             }
             
-            // Clear existing entities
+            // Clear any existing entities
             this.entityManager.clear();
             
-            // Clear event system
-            this.eventSystem.clear();
+            // Create game objects
+            this.grid = new Grid(rows, cols);
+            this.turnSystem = new TurnSystem(gameStage, { grid: this.grid });
+            this.evolutionSystem = new EvolutionSystem(); // Initialize evolution system
+            this.evolutionSystem.init(); // Make sure to call init
             
-            // Create core systems
-            if (!window.Grid || !window.TurnSystem) {
-                throw new Error('Grid or TurnSystem classes not found');
-            }
+            // Initialize the grid with default tiles
+            this.grid.init();
             
-            this.grid = new Grid(rows, cols, gameStage);
-            this.turnSystem = new TurnSystem(gameStage);
+            // Initialize turn system
+            this.turnSystem.init();
             
-            // Set the grid on the turn system
-            if (this.turnSystem && this.turnSystem.setGrid) {
-                this.turnSystem.setGrid(this.grid);
-            }
+            // Initialize metrics system
+            this.metricsSystem = new MetricsSystem();
+            this.metricsSystem.reset();
+            
+            // Set up event listeners
+            this.setupEventListeners();
+            
+            // Create player entity
+            this.createPlayer();
+            
+            // Initialize UI manager
+            this.uiManager = new UIManager({
+                grid: this.grid,
+                turnSystem: this.turnSystem
+            });
+            this.uiManager.init();
             
             // Add feedback wrapper element if it doesn't exist yet
             if (!document.getElementById('feedback-message')) {
@@ -93,48 +122,28 @@ export class Game {
                 evolveBtn.classList.add('hidden');
             }
             
-            // Initialize grid and create entities
-            if (this.grid && typeof this.grid.initializeGrid === 'function') {
-                this.grid.initializeGrid();
-            } else {
-                throw new Error('Grid initialization failed: grid object invalid');
+            // Initial visibility update for player's starting location
+            const playerEntity = this.entityManager.getEntitiesByTag('player')[0];
+            if (playerEntity) {
+                const playerComponent = playerEntity.getComponent(PlayerComponent);
+                if (playerComponent) {
+                    // Instead of calling non-existent method, we'll mark the starting tile as explored
+                    const startRow = playerComponent.row;
+                    const startCol = playerComponent.col;
+                    const tileEntity = this.entityManager.getEntitiesByTag(`tile_${startRow}_${startCol}`)[0];
+                    
+                    if (tileEntity) {
+                        const tileComponent = tileEntity.getComponent(TileComponent);
+                        if (tileComponent) {
+                            tileComponent.markExplored();
+                            playerComponent.tilesExplored++;
+                        }
+                    }
+                    
+                    // Make sure the player marker is positioned correctly
+                    playerComponent.updateMarkerPosition();
+                }
             }
-            
-            // Create player entity
-            this.createPlayer();
-            
-            // Initialize systems
-            if (this.turnSystem && typeof this.turnSystem.init === 'function') {
-                this.turnSystem.init();
-                
-                // Reset current level evolution points
-                this.turnSystem.resetCurrentLevelPoints();
-            } else {
-                throw new Error('TurnSystem initialization failed: turnSystem object invalid');
-            }
-            
-            // Initialize UI Manager
-            this.uiManager = new UIManager();
-            if (this.uiManager && typeof this.uiManager.init === 'function') {
-                this.uiManager.init({
-                    grid: this.grid,
-                    turnSystem: this.turnSystem
-                });
-            } else {
-                console.warn('UIManager initialization failed');
-            }
-            
-            // Initialize all entities
-            this.entityManager.initEntities();
-            
-            // Set up event listeners
-            this.setupEventListeners();
-            
-            // Update UI with initial values
-            this.updateUI();
-            
-            // Start game loop
-            this.startGameLoop();
             
             // Mark game as initialized
             this.isInitialized = true;
@@ -158,7 +167,9 @@ export class Game {
      * Set up event listeners
      */
     setupEventListeners() {
-        // Listen for tile clicks
+        console.log("Setting up Game event listeners");
+        
+        // Listen for tile clicks - using context-based binding
         this.eventSystem.on('tileClicked', this.handleTileClick, this);
         
         // Listen for turn end action - Fix the end turn button
@@ -179,19 +190,15 @@ export class Game {
             console.warn("End turn button not found");
         }
         
-        // Listen for energy changes
-        this.eventSystem.on('playerEnergyChanged', this.updateEnergyDisplay.bind(this));
+        // NOTE: We've moved UI update event listeners to UIManager to avoid duplicates
+        // The Game class will no longer directly listen for these events:
+        // - playerEnergyChanged
+        // - playerMovementPointsChanged 
+        // - turnStart (for display updates)
+        // - systemBalanceChanged
+        // - playerEvolutionPointsChanged
         
-        // Listen for turn changes
-        this.eventSystem.on('turnStart', this.updateTurnDisplay.bind(this));
-        
-        // Listen for system balance changes
-        this.eventSystem.on('systemBalanceChanged', this.updateBalanceDisplay.bind(this));
-        
-        // Listen for evolution points changes
-        this.eventSystem.on('playerEvolutionPointsChanged', this.updateEvolutionPointsDisplay.bind(this));
-        
-        // Listen for evolution points awards
+        // However, we'll still listen for evolutionPointsAwarded for game logic
         this.eventSystem.on('evolutionPointsAwarded', this.showEvolutionPointsMessage.bind(this));
         
         // Listen for evolution ready state
@@ -279,11 +286,17 @@ export class Game {
         console.log('End turn method called');
         
         try {
-            // Clear any active action in the game
-            this.setPlayerAction(null);
+            // Get the ActionPanel if available
+            const actionPanel = window.actionPanel;
             
+            // Use ActionPanel's end turn handler if available
+            if (actionPanel && typeof actionPanel.handleEndTurnClick === 'function') {
+                actionPanel.handleEndTurnClick();
+                return true;
+            }
+            
+            // Fallback: Direct approach if ActionPanel is not available
             // Get player entity and ensure its action is cleared
-            // This provides an additional safety layer beyond ActionPanel's handling
             const playerEntity = this.entityManager.getEntitiesByTag('player')[0];
             if (playerEntity) {
                 const playerComponent = playerEntity.getComponent(PlayerComponent);
@@ -308,22 +321,34 @@ export class Game {
     }
     
     /**
-     * Update UI with initial values
+     * Update the UI with current values
      */
     updateUI() {
-        // Update energy display
+        // Skip if UI Manager isn't ready
+        if (!this.uiManager) {
+            console.warn("Cannot update UI: UIManager not initialized");
+            return;
+        }
+        
+        // Get player entity
         const playerEntity = this.entityManager.getEntitiesByTag('player')[0];
         if (playerEntity) {
             const playerComponent = playerEntity.getComponent(PlayerComponent);
             if (playerComponent) {
-                this.updateEnergyDisplay({
-                    player: playerComponent,
-                    newEnergy: playerComponent.energy
+                // Update energy display via UIManager
+                this.uiManager.updateEnergyDisplay({
+                    currentEnergy: playerComponent.energy,
+                    maxEnergy: playerComponent.maxEnergy
                 });
                 
-                // Update evolution points display
-                this.updateEvolutionPointsDisplay({
-                    player: playerComponent,
+                // Update movement points display via UIManager
+                this.uiManager.updateMovementPointsDisplay({
+                    newPoints: playerComponent.movementPoints,
+                    maxPoints: playerComponent.maxMovementPoints
+                });
+                
+                // Update evolution points display via UIManager
+                this.uiManager.updateEvolutionPointsDisplay({
                     chaosPoints: playerComponent.chaosEvolutionPoints,
                     flowPoints: playerComponent.flowEvolutionPoints,
                     orderPoints: playerComponent.orderEvolutionPoints
@@ -331,109 +356,18 @@ export class Game {
             }
         }
         
-        // Update turn display
-        this.updateTurnDisplay({
-            turnCount: this.turnSystem.turnCount
+        // Update turn display via UIManager
+        this.uiManager.updateTurnDisplay({
+            turnCount: this.turnSystem.turnCount,
+            maxTurns: this.turnSystem.maxTurns
         });
         
-        // Update balance display
+        // Update balance display via UIManager
         const balance = this.grid.getSystemBalance();
-        this.updateBalanceDisplay({
-            systemChaos: balance.chaos,
-            systemOrder: balance.order
+        this.uiManager.updateBalanceDisplay({
+            chaos: balance.chaos,
+            order: balance.order
         });
-    }
-    
-    /**
-     * Update energy display
-     * @param {Object} data - Event data
-     */
-    updateEnergyDisplay(data) {
-        const energyValue = document.querySelector('#energy-display .value');
-        if (energyValue) {
-            energyValue.textContent = data.newEnergy;
-        }
-    }
-    
-    /**
-     * Update turn display
-     * @param {Object} data - Event data
-     */
-    updateTurnDisplay(data) {
-        const turnValue = document.querySelector('#turn-display .value');
-        if (turnValue) {
-            turnValue.textContent = data.turnCount;
-        }
-    }
-    
-    /**
-     * Update balance display
-     * @param {Object} data - Event data
-     */
-    updateBalanceDisplay(data) {
-        const chaosPercent = Math.round(data.systemChaos * 100);
-        const orderPercent = Math.round(data.systemOrder * 100);
-        
-        // Update chaos/order value text
-        const chaosValue = document.querySelector('.chaos-value');
-        if (chaosValue) {
-            chaosValue.textContent = chaosPercent;
-        }
-        
-        const orderValue = document.querySelector('.order-value');
-        if (orderValue) {
-            orderValue.textContent = orderPercent;
-        }
-        
-        // Update visual balance bar
-        const chaosFill = document.querySelector('.balance-chaos-fill');
-        if (chaosFill) {
-            chaosFill.style.width = `${chaosPercent}%`;
-        }
-        
-        // Update balance marker position (perfect balance at 50%)
-        const balanceMarker = document.querySelector('.balance-marker');
-        if (balanceMarker) {
-            // Position marker based on chaos percentage
-            balanceMarker.style.left = `${chaosPercent}%`;
-            
-            // Color the marker based on how far from perfect balance
-            const balanceDeviation = Math.abs(chaosPercent - 50);
-            if (balanceDeviation < 5) {
-                // Near perfect balance - green
-                balanceMarker.style.backgroundColor = 'rgba(100, 255, 100, 0.9)';
-            } else if (balanceDeviation < 20) {
-                // Moderate imbalance - yellow
-                balanceMarker.style.backgroundColor = 'rgba(255, 255, 100, 0.9)';
-            } else {
-                // Severe imbalance - white
-                balanceMarker.style.backgroundColor = 'rgba(255, 255, 255, 0.9)';
-            }
-        }
-    }
-    
-    /**
-     * Update evolution points display
-     * @param {Object} data - Event data
-     */
-    updateEvolutionPointsDisplay(data) {
-        // Update chaos points
-        const chaosPoints = document.querySelector('#evolution-points-display .chaos-points');
-        if (chaosPoints) {
-            chaosPoints.textContent = data.chaosPoints || 0;
-        }
-        
-        // Update flow points
-        const flowPoints = document.querySelector('#evolution-points-display .flow-points');
-        if (flowPoints) {
-            flowPoints.textContent = data.flowPoints || 0;
-        }
-        
-        // Update order points
-        const orderPoints = document.querySelector('#evolution-points-display .order-points');
-        if (orderPoints) {
-            orderPoints.textContent = data.orderPoints || 0;
-        }
     }
     
     /**
@@ -545,9 +479,9 @@ export class Game {
      * @param {string} action - Action to set
      */
     setPlayerAction(action) {
-        console.log(`setPlayerAction called with ${action}`);
+        console.log(`Game.setPlayerAction called with ${action}`);
         
-        // Get the current action
+        // Get the player component
         const playerEntity = this.entityManager.getEntitiesByTag('player')[0];
         if (!playerEntity) {
             console.error("No player entity found");
@@ -560,25 +494,27 @@ export class Game {
             return;
         }
         
-        const currentAction = playerComponent.currentAction;
-        console.log(`Current action: ${currentAction}, New action: ${action}`);
-        
-        // Clear active class from all buttons FIRST
-        const buttons = document.querySelectorAll('.action-btn');
-        buttons.forEach(btn => {
-            if (!btn.id.includes('end-turn')) {
-                btn.classList.remove('active');
+        // Special handling for null action - directly clear player's action
+        if (action === null) {
+            playerComponent.setAction(null);
+            
+            // If we have an ActionPanel, also update its state
+            if (window.actionPanel) {
+                window.actionPanel.currentAction = null;
+                window.actionPanel.updateButtonStates();
             }
-        });
-        
-        // Don't toggle off actions - always set the new action
-        // Set active class on the clicked button
-        if (action) {
-            const button = document.getElementById(`${action}-btn`);
-            if (button) {
-                button.classList.add('active');
-            }
+            return;
         }
+        
+        // For normal actions, if we have an ActionPanel, delegate to it
+        if (window.actionPanel) {
+            // ActionPanel will handle the UI updates and player component updates
+            window.actionPanel.handleActionButtonClick(action);
+            return;
+        }
+        
+        // Fallback if ActionPanel is not available
+        console.log("ActionPanel not available, using direct approach");
         
         // Set the action on the player component
         playerComponent.setAction(action);
@@ -754,9 +690,11 @@ export class Game {
     
     /**
      * Restart the game
+     * @param {number} rows - Number of rows in the grid
+     * @param {number} cols - Number of columns in the grid
      */
-    restart() {
-        console.log('Restarting game');
+    restart(rows = 5, cols = 5) {
+        console.log(`Restarting game with grid size ${rows}x${cols}`);
         
         // Hide the evolve button
         const evolveBtn = document.getElementById('evolve-btn');
@@ -769,20 +707,35 @@ export class Game {
         // Clean up resources
         this.destroy();
         
-        // Re-initialize the game
-        this.init();
+        // Re-initialize the game with the specified grid size
+        this.init(rows, cols);
         
         // Reset evolution system when starting a completely new game
-        const evolutionSystem = new EvolutionSystem();
-        evolutionSystem.reset(false); // Don't keep traits
+        this.evolutionSystem.reset(false); // Don't keep traits
     }
     
     /**
      * Clean up resources
      */
     destroy() {
-        // Remove event listeners
-        this.eventSystem.off('tileClicked', this.handleTileClick, this);
+        console.log("Game cleanup: removing event listeners and cleaning up systems");
+        
+        // Store references to all events we need to unregister
+        const eventsToUnregister = [
+            { event: 'tileClicked', handler: this.handleTileClick, context: this },
+            { event: 'evolutionPointsAwarded', handler: this.showEvolutionPointsMessage },
+            { event: 'evolutionReady', handler: this.handleEvolutionReady }
+        ];
+        
+        // Unregister all events
+        for (const eventInfo of eventsToUnregister) {
+            if (eventInfo.context) {
+                this.eventSystem.off(eventInfo.event, eventInfo.handler, eventInfo.context);
+            } else {
+                // For bound functions, try to remove all handlers for this event type
+                this.eventSystem.removeAllListeners(eventInfo.event);
+            }
+        }
         
         // Clean up UI Manager
         if (this.uiManager) {
@@ -791,6 +744,11 @@ export class Game {
         }
         
         // Clean up systems in reverse order
+        if (this.evolutionSystem) {
+            this.evolutionSystem.destroy();
+            this.evolutionSystem = null;
+        }
+        
         if (this.turnSystem) {
             this.turnSystem.destroy();
             this.turnSystem = null;
@@ -801,8 +759,21 @@ export class Game {
             this.grid = null;
         }
         
+        // Clear entity manager
+        if (this.entityManager) {
+            this.entityManager.clear(); // Use clear() instead of clearEntities()
+        }
+        
+        // Stop game loop
+        if (this.gameLoopId) {
+            cancelAnimationFrame(this.gameLoopId);
+            this.gameLoopId = null;
+        }
+        
         // Mark as not initialized
         this.isInitialized = false;
+        
+        console.log("Game cleanup completed successfully");
     }
     
     /**
@@ -950,6 +921,9 @@ export class Game {
             return;
         }
         
+        // Save completion data to instance property so it can be updated
+        this.currentCompletionData = { ...data };
+        
         // Clear existing content
         modalContent.innerHTML = '';
         
@@ -1041,9 +1015,8 @@ export class Game {
     showStatsScreen(data) {
         console.log('Showing stats screen');
         
-        // Get metrics for the current level
-        const metricsSystem = new MetricsSystem();
-        const currentMetrics = metricsSystem.getMetrics();
+        // Get metrics for the current level using the class property
+        const currentMetrics = this.metricsSystem.getMetrics();
         
         // Get historical metrics from localStorage
         const historicalMetrics = JSON.parse(localStorage.getItem('levelMetrics') || '[]');
@@ -1604,13 +1577,35 @@ export class Game {
         
         // Get player entity and component
         const playerEntity = this.entityManager.getEntitiesByTag('player')[0];
-        if (!playerEntity) return;
+        if (!playerEntity) {
+            console.error("No player entity found when showing evolution screen");
+            return;
+        }
         
         const playerComponent = playerEntity.getComponent(PlayerComponent);
-        if (!playerComponent) return;
+        if (!playerComponent) {
+            console.error("No player component found when showing evolution screen");
+            return;
+        }
         
-        // Get evolution system
-        const evolutionSystem = new EvolutionSystem();
+        // IMPORTANT: The player component is the source of truth for evolution points
+        // Update the data object with the latest values from the player component
+        data.chaosPoints = playerComponent.chaosEvolutionPoints;
+        data.flowPoints = playerComponent.flowEvolutionPoints;
+        data.orderPoints = playerComponent.orderEvolutionPoints;
+        
+        // If we have cached completion data, update it as well
+        if (this.currentCompletionData) {
+            this.currentCompletionData.chaosPoints = playerComponent.chaosEvolutionPoints;
+            this.currentCompletionData.flowPoints = playerComponent.flowEvolutionPoints;
+            this.currentCompletionData.orderPoints = playerComponent.orderEvolutionPoints;
+            this.currentCompletionData.totalPoints = playerComponent.evolutionPoints;
+        }
+        
+        console.log(`Evolution screen points from player component - Chaos: ${data.chaosPoints}, Flow: ${data.flowPoints}, Order: ${data.orderPoints}`);
+        
+        // Use the existing evolution system instance
+        const evolutionSystem = this.evolutionSystem;
         
         // Prepare the modal container
         const modalContainer = document.getElementById('modal-container');
@@ -1821,7 +1816,7 @@ export class Game {
                         traitCard.querySelector('.trait-status').innerHTML = '<span class="status-acquired">Acquired</span>';
                         
                         // Update points display
-                        this.updateEvolutionPointsDisplay(data, trait.cost, costType);
+                        this.updateEvolutionScreenPoints(data, trait.cost, costType);
                     });
                 }
             }
@@ -1833,86 +1828,220 @@ export class Game {
     /**
      * Unlock a trait for the player
      * @param {Object} trait - The trait to unlock
-     * @param {Object} data - Completion data
+     * @param {Object} data - The player data
      * @param {PlayerComponent} playerComponent - The player component
      */
     unlockTrait(trait, data, playerComponent) {
-        // Apply trait to player
-        playerComponent.addTrait(trait);
+        console.log(`Unlocking trait: ${trait.name}`, trait);
         
-        // Deduct points based on cost type
-        const costType = this.getTraitCostType(trait, data.gameStage);
-        
-        if (costType === 'chaos') {
-            data.chaosPoints -= trait.cost;
-            playerComponent.chaosEvolutionPoints -= trait.cost;
-        } else if (costType === 'flow') {
-            data.flowPoints -= trait.cost;
-            playerComponent.flowEvolutionPoints -= trait.cost;
-        } else if (costType === 'order') {
-            data.orderPoints -= trait.cost;
-            playerComponent.orderEvolutionPoints -= trait.cost;
-        } else if (costType === 'mixed') {
-            // For mixed, deduct evenly from all types
-            const costPerType = Math.ceil(trait.cost / 3);
-            data.chaosPoints = Math.max(0, data.chaosPoints - costPerType);
-            data.flowPoints = Math.max(0, data.flowPoints - costPerType);
-            data.orderPoints = Math.max(0, data.orderPoints - costPerType);
-            
-            playerComponent.chaosEvolutionPoints = Math.max(0, playerComponent.chaosEvolutionPoints - costPerType);
-            playerComponent.flowEvolutionPoints = Math.max(0, playerComponent.flowEvolutionPoints - costPerType);
-            playerComponent.orderEvolutionPoints = Math.max(0, playerComponent.orderEvolutionPoints - costPerType);
+        if (!trait || !data || !playerComponent) {
+            console.error("Cannot unlock trait - missing required parameters");
+            return false;
         }
         
-        // Update the legacy total evolution points for compatibility
+        // Add trait to acquired traits
+        const evolutionSystem = this.getSystem('evolutionSystem');
+        if (!evolutionSystem) {
+            console.error("Evolution system not found. Cannot unlock trait.");
+            return false;
+        }
+        
+        // Check that player has enough points
+        let hasSufficientPoints = true;
+        let costType = this.getTraitCostType(trait, data.gameStage);
+        
+        // Handle both numeric and object cost structures
+        let costObj = { chaos: 0, flow: 0, order: 0 };
+        
+        if (typeof trait.cost === 'number') {
+            // Handle numeric cost based on cost type
+            const numericCost = trait.cost;
+            
+            if (costType === 'chaos') {
+                costObj.chaos = numericCost;
+            } else if (costType === 'flow') {
+                costObj.flow = numericCost;
+            } else if (costType === 'order') {
+                costObj.order = numericCost;
+            } else if (costType === 'mixed') {
+                // For mixed, distribute evenly
+                const costPerType = Math.ceil(numericCost / 3);
+                costObj.chaos = costPerType;
+                costObj.flow = costPerType;
+                costObj.order = costPerType;
+            }
+        } else if (typeof trait.cost === 'object' && trait.cost !== null) {
+            // If it's already an object, use it directly
+            costObj.chaos = !isNaN(trait.cost.chaos) ? trait.cost.chaos : 0;
+            costObj.flow = !isNaN(trait.cost.flow) ? trait.cost.flow : 0;
+            costObj.order = !isNaN(trait.cost.order) ? trait.cost.order : 0;
+        } else {
+            console.error("Invalid trait cost format:", trait.cost);
+            return false;
+        }
+        
+        // Check if player has enough of each point type
+        if (costObj.chaos > data.chaosPoints) hasSufficientPoints = false;
+        if (costObj.flow > data.flowPoints) hasSufficientPoints = false;
+        if (costObj.order > data.orderPoints) hasSufficientPoints = false;
+        
+        if (!hasSufficientPoints) {
+            console.error("Player doesn't have enough points to unlock trait:", trait.name);
+            this.showFeedbackMessage("Not enough evolution points to unlock this trait!");
+            return false;
+        }
+        
+        // Apply trait to player
+        evolutionSystem.acquireTrait(trait, playerComponent);
+        
+        // Deduct points from data object (used for UI)
+        data.chaosPoints = Math.max(0, data.chaosPoints - costObj.chaos);
+        data.flowPoints = Math.max(0, data.flowPoints - costObj.flow);
+        data.orderPoints = Math.max(0, data.orderPoints - costObj.order);
+        
+        // IMPORTANT: Also deduct points from player component 
+        // This ensures points are properly persisted
+        playerComponent.chaosEvolutionPoints = Math.max(0, playerComponent.chaosEvolutionPoints - costObj.chaos);
+        playerComponent.flowEvolutionPoints = Math.max(0, playerComponent.flowEvolutionPoints - costObj.flow);
+        playerComponent.orderEvolutionPoints = Math.max(0, playerComponent.orderEvolutionPoints - costObj.order);
         playerComponent.evolutionPoints = playerComponent.chaosEvolutionPoints + 
                                          playerComponent.flowEvolutionPoints + 
                                          playerComponent.orderEvolutionPoints;
         
-        // Emit an event to notify other systems
+        // Also update the cached completion data if it exists
+        if (this.currentCompletionData) {
+            this.currentCompletionData.chaosPoints = data.chaosPoints;
+            this.currentCompletionData.flowPoints = data.flowPoints;
+            this.currentCompletionData.orderPoints = data.orderPoints;
+            this.currentCompletionData.totalPoints = data.chaosPoints + data.flowPoints + data.orderPoints;
+        }
+        
+        console.log(`Updated points after unlock: Chaos: ${data.chaosPoints}, Flow: ${data.flowPoints}, Order: ${data.orderPoints}`);
+        console.log(`Player component points: Chaos: ${playerComponent.chaosEvolutionPoints}, Flow: ${playerComponent.flowEvolutionPoints}, Order: ${playerComponent.orderEvolutionPoints}`);
+        
+        // Show feedback
+        this.showFeedbackMessage(`Unlocked trait: ${trait.name}!`, 'success', 3000, true);
+        
+        // Also add message to log
+        this.addLogMessage(`You acquired the ${trait.name} trait!`);
+        
+        // Emit point change event to update all UI elements
         this.eventSystem.emit('playerEvolutionPointsChanged', {
-            player: playerComponent,
             chaosPoints: playerComponent.chaosEvolutionPoints,
             flowPoints: playerComponent.flowEvolutionPoints,
             orderPoints: playerComponent.orderEvolutionPoints,
             totalPoints: playerComponent.evolutionPoints
         });
         
-        // Show a feedback message
-        this.showFeedbackMessage(
-            `<span style="color: #64dfdf;">Trait Acquired:</span> ${trait.name}`, 
-            'success', 
-            3000
-        );
-        
-        // Add message to log
-        this.addLogMessage(`You acquired the ${trait.name} trait!`);
+        // Return success
+        return true;
     }
     
     /**
-     * Update the evolution points display after unlocking a trait
-     * @param {Object} data - Completion data
-     * @param {number} cost - The cost of the trait
-     * @param {string} costType - The type of cost (chaos, flow, order, mixed)
+     * Update the evolution points display in the evolution screen
+     * @param {Object} data - Player data
+     * @param {Object} cost - Cost object with chaos, flow, order properties
+     * @param {string} costType - Type of cost (chaos, flow, order, mixed)
      */
-    updateEvolutionPointsDisplay(data, cost, costType) {
-        // Update the evolution screen display
-        const chaosValueElement = document.querySelector('.point-type.chaos .point-value');
-        const flowValueElement = document.querySelector('.point-type.flow .point-value');
-        const orderValueElement = document.querySelector('.point-type.order .point-value');
+    updateEvolutionScreenPoints(data, cost, costType) {
+        console.log(`Updating evolution screen points. Chaos: ${data.chaosPoints}, Flow: ${data.flowPoints}, Order: ${data.orderPoints}`);
         
-        if (chaosValueElement) chaosValueElement.textContent = data.chaosPoints;
-        if (flowValueElement) flowValueElement.textContent = data.flowPoints;
-        if (orderValueElement) orderValueElement.textContent = data.orderPoints;
+        // Ensure we have valid non-NaN values
+        data.chaosPoints = !isNaN(data.chaosPoints) ? data.chaosPoints : 0;
+        data.flowPoints = !isNaN(data.flowPoints) ? data.flowPoints : 0;
+        data.orderPoints = !isNaN(data.orderPoints) ? data.orderPoints : 0;
         
-        // Also update the game-info display
-        const chaosPoints = document.querySelector('#evolution-points-display .chaos-points');
-        const flowPoints = document.querySelector('#evolution-points-display .flow-points');
-        const orderPoints = document.querySelector('#evolution-points-display .order-points');
+        // IMPORTANT: Update the cached completion data to persist points between screens
+        if (this.currentCompletionData) {
+            this.currentCompletionData.chaosPoints = data.chaosPoints;
+            this.currentCompletionData.flowPoints = data.flowPoints;
+            this.currentCompletionData.orderPoints = data.orderPoints;
+            this.currentCompletionData.totalPoints = data.chaosPoints + data.flowPoints + data.orderPoints;
+        }
         
+        // IMPORTANT: Also ensure the player component has the same values
+        // This ensures that when we transition between levels, the correct values are saved
+        const playerEntity = this.entityManager.getEntitiesByTag('player')[0];
+        if (playerEntity) {
+            const playerComponent = playerEntity.getComponent(PlayerComponent);
+            if (playerComponent) {
+                // Sync evolution points with the data object
+                playerComponent.chaosEvolutionPoints = data.chaosPoints;
+                playerComponent.flowEvolutionPoints = data.flowPoints;
+                playerComponent.orderEvolutionPoints = data.orderPoints;
+                playerComponent.evolutionPoints = data.chaosPoints + data.flowPoints + data.orderPoints;
+                
+                console.log(`Synchronized player component points - Chaos: ${playerComponent.chaosEvolutionPoints}, Flow: ${playerComponent.flowEvolutionPoints}, Order: ${playerComponent.orderEvolutionPoints}`);
+            }
+        }
+        
+        // Get the point display elements - make sure we're using correct selectors
+        // First try the evolution-points-display class (modal display)
+        let chaosPoints = document.querySelector('.evolution-points-display .chaos-points .point-value');
+        let flowPoints = document.querySelector('.evolution-points-display .flow-points .point-value');
+        let orderPoints = document.querySelector('.evolution-points-display .order-points .point-value');
+        
+        // Update the values if elements exist
         if (chaosPoints) chaosPoints.textContent = data.chaosPoints;
         if (flowPoints) flowPoints.textContent = data.flowPoints;
         if (orderPoints) orderPoints.textContent = data.orderPoints;
+        
+        // Also update points in the points-summary if it exists (for completion screen)
+        chaosPoints = document.querySelector('.points-summary .value.chaos');
+        flowPoints = document.querySelector('.points-summary .value.flow');
+        orderPoints = document.querySelector('.points-summary .value.order');
+        const totalPoints = document.querySelector('.points-summary .total .value');
+        
+        // Update completion screen values if they exist
+        if (chaosPoints) chaosPoints.textContent = data.chaosPoints;
+        if (flowPoints) flowPoints.textContent = data.flowPoints;
+        if (orderPoints) orderPoints.textContent = data.orderPoints;
+        if (totalPoints) totalPoints.textContent = data.chaosPoints + data.flowPoints + data.orderPoints;
+        
+        // Also check for point-type class format which might be used in some places
+        chaosPoints = document.querySelector('.point-type.chaos .point-value');
+        flowPoints = document.querySelector('.point-type.flow .point-value');
+        orderPoints = document.querySelector('.point-type.order .point-value');
+        
+        // Update these too if they exist (could be alternate format)
+        if (chaosPoints) chaosPoints.textContent = data.chaosPoints;
+        if (flowPoints) flowPoints.textContent = data.flowPoints;
+        if (orderPoints) orderPoints.textContent = data.orderPoints;
+        
+        // Also try the evolution-points-display directly, which is the format used in the evolution screen
+        chaosPoints = document.querySelector('.evolution-points-display .point-type.chaos .point-value');
+        flowPoints = document.querySelector('.evolution-points-display .point-type.flow .point-value');
+        orderPoints = document.querySelector('.evolution-points-display .point-type.order .point-value');
+        
+        // Update these specific selectors as well
+        if (chaosPoints) chaosPoints.textContent = data.chaosPoints;
+        if (flowPoints) flowPoints.textContent = data.flowPoints;
+        if (orderPoints) orderPoints.textContent = data.orderPoints;
+        
+        // Emit unified event for both evolution screen and game-info display updates
+        this.eventSystem.emit('playerEvolutionPointsChanged', {
+            chaosPoints: data.chaosPoints,
+            flowPoints: data.flowPoints,
+            orderPoints: data.orderPoints,
+            totalPoints: data.chaosPoints + data.flowPoints + data.orderPoints
+        });
+        
+        // Also refresh the trait list to update unlockable status for all traits
+        // Get the current active category
+        const activeTab = document.querySelector('.trait-tab.active');
+        if (activeTab) {
+            const category = activeTab.getAttribute('data-category');
+            const container = document.querySelector('.trait-list-container');
+            const playerEntity = this.entityManager.getEntitiesByTag('player')[0];
+            
+            if (container && playerEntity && category) {
+                const playerComponent = playerEntity.getComponent(PlayerComponent);
+                if (playerComponent) {
+                    // Refresh the trait list with updated data
+                    this.populateTraitList(container, category, data, playerComponent);
+                }
+            }
+        }
     }
     
     /**
@@ -1936,21 +2065,42 @@ export class Game {
         // Calculate points needed
         const costType = this.getTraitCostType(trait, data.gameStage);
         
-        if (costType === 'chaos') {
-            return data.chaosPoints >= trait.cost;
-        } else if (costType === 'flow') {
-            return data.flowPoints >= trait.cost;
-        } else if (costType === 'order') {
-            return data.orderPoints >= trait.cost;
-        } else if (costType === 'mixed') {
-            // For mixed, need 1/3 of cost in each type
-            const costPerType = Math.ceil(trait.cost / 3);
-            return data.chaosPoints >= costPerType && 
-                   data.flowPoints >= costPerType && 
-                   data.orderPoints >= costPerType;
+        // Handle both numeric and object cost structures
+        let costObj = { chaos: 0, flow: 0, order: 0 };
+        
+        if (typeof trait.cost === 'number') {
+            // Handle numeric cost based on cost type
+            const numericCost = trait.cost;
+            
+            if (costType === 'chaos') {
+                costObj.chaos = numericCost;
+            } else if (costType === 'flow') {
+                costObj.flow = numericCost;
+            } else if (costType === 'order') {
+                costObj.order = numericCost;
+            } else if (costType === 'mixed') {
+                // For mixed, distribute evenly
+                const costPerType = Math.ceil(numericCost / 3);
+                costObj.chaos = costPerType;
+                costObj.flow = costPerType;
+                costObj.order = costPerType;
+            }
+        } else if (typeof trait.cost === 'object' && trait.cost !== null) {
+            // If it's already an object, use it directly
+            costObj.chaos = !isNaN(trait.cost.chaos) ? trait.cost.chaos : 0;
+            costObj.flow = !isNaN(trait.cost.flow) ? trait.cost.flow : 0;
+            costObj.order = !isNaN(trait.cost.order) ? trait.cost.order : 0;
+        } else {
+            console.error("Invalid trait cost format:", trait.cost);
+            return false;
         }
         
-        return false;
+        // Check if player has enough of each point type
+        if (costObj.chaos > data.chaosPoints) return false;
+        if (costObj.flow > data.flowPoints) return false;
+        if (costObj.order > data.orderPoints) return false;
+        
+        return true;
     }
     
     /**
@@ -2079,8 +2229,26 @@ export class Game {
             gridSize = 9; // Even larger grid for late game
         }
         
+        // Ensure we clean up action panel completely before destroying the Game
+        if (window.actionPanel) {
+            console.log("Cleaning up action panel before level transition");
+            window.actionPanel.destroy();
+            window.actionPanel = null;
+        }
+        
+        // Save metrics system data if needed
+        const metricsData = this.metricsSystem ? this.metricsSystem.getData() : null;
+        
+        // Fully destroy the current game instance
+        this.destroy();
+        
         // Restart the game with new settings
         this.init(gridSize, gridSize, data.gameStage);
+        
+        // Restore metrics data if needed
+        if (metricsData && this.metricsSystem) {
+            this.metricsSystem.setData(metricsData);
+        }
         
         // Reset current level evolution points in the TurnSystem
         if (this.turnSystem) {
@@ -2101,6 +2269,17 @@ export class Game {
                 if (evolveBtn) {
                     evolveBtn.classList.add('hidden');
                 }
+                
+                // Reset any action selection from previous level
+                const playerComponent = playerEntity.getComponent(PlayerComponent);
+                if (playerComponent) {
+                    playerComponent.setAction(null);
+                    
+                    // Update UI to reflect no selected action
+                    if (window.actionPanel) {
+                        window.actionPanel.updateButtonStates();
+                    }
+                }
             } else {
                 console.error('Player entity not found when attempting to restore traits');
             }
@@ -2118,9 +2297,8 @@ export class Game {
         const playerComponent = playerEntity.getComponent(PlayerComponent);
         if (!playerComponent) return { traitIds: [], evolutionPoints: {}, acquiredTraits: {} };
         
-        // Get acquired traits from evolution system
-        const evolutionSystem = new EvolutionSystem();
-        const acquiredTraits = evolutionSystem.getAcquiredTraitsData();
+        // Get acquired traits from evolution system (using the property instead of creating new instance)
+        const acquiredTraits = this.evolutionSystem.getAcquiredTraitsData();
         
         // Save trait IDs instead of full trait objects to avoid serialization issues with functions
         const traitIds = playerComponent.traits.map(trait => trait.id);
@@ -2140,46 +2318,50 @@ export class Game {
     }
     
     /**
-     * Restore player traits and evolution points after transitioning to a new level
-     * @param {Object} playerData - Object containing player traits and evolution points
+     * Restore player traits and evolution points after level transition
+     * @param {Object} playerData - Player data from savePlayerTraits
      */
     restorePlayerTraits(playerData) {
-        if (!playerData) return;
+        console.log(`Restoring player traits after level transition`);
         
+        // Get player entity
         const playerEntity = this.entityManager.getEntitiesByTag('player')[0];
-        if (!playerEntity) return;
+        if (!playerEntity) {
+            console.error("No player entity found when trying to restore traits");
+            return;
+        }
         
+        // Get player component
         const playerComponent = playerEntity.getComponent(PlayerComponent);
-        if (!playerComponent) return;
+        if (!playerComponent) {
+            console.error("No player component found when trying to restore traits");
+            return;
+        }
         
-        // Initialize the evolution system
-        const evolutionSystem = new EvolutionSystem();
-        
-        // Restore acquired traits in evolution system
+        // Restore acquired traits data in evolution system (using the property)
         if (playerData.acquiredTraits) {
-            evolutionSystem.setAcquiredTraitsData(playerData.acquiredTraits);
+            this.evolutionSystem.setAcquiredTraitsData(playerData.acquiredTraits);
         }
         
-        // Restore traits by getting them fresh from the EvolutionSystem using their IDs
-        const traitIds = playerData.traitIds || [];
-        console.log(`Restoring ${traitIds.length} traits: ${traitIds.join(', ')}`);
-        
-        // Clear the player's traits array to avoid duplicates
-        playerComponent.traits = [];
-        
-        // Add each trait using its ID
-        for (const traitId of traitIds) {
-            const trait = evolutionSystem.getTraitById(traitId);
-            if (trait) {
-                // Add the trait without triggering the onAcquire effect yet
-                playerComponent.addTraitWithoutEffect(trait);
-            } else {
-                console.warn(`Could not find trait with ID: ${traitId}`);
+        // Check and restore traits
+        if (Array.isArray(playerData.traitIds) && playerData.traitIds.length > 0) {
+            console.log(`Restoring ${playerData.traitIds.length} traits: ${playerData.traitIds.join(', ')}`);
+            
+            // Restore each trait
+            for (const traitId of playerData.traitIds) {
+                const trait = this.evolutionSystem.getTraitById(traitId);
+                if (trait) {
+                    playerComponent.addTrait(trait);
+                } else {
+                    console.warn(`Could not find trait with ID: ${traitId}`);
+                }
             }
+            
+            // Apply all trait effects to ensure consistent state
+            playerComponent.applyAllTraitEffects();
+        } else {
+            console.log('No traits to restore');
         }
-        
-        // Now apply all trait effects at once
-        playerComponent.applyAllTraitEffects();
         
         // Restore evolution points
         if (playerData.evolutionPoints) {
@@ -2188,24 +2370,16 @@ export class Game {
             playerComponent.orderEvolutionPoints = playerData.evolutionPoints.order || 0;
             playerComponent.evolutionPoints = playerData.evolutionPoints.total || 0;
             
-            // Update UI with restored evolution points
-            this.updateEvolutionPointsDisplay({
-                chaosPoints: playerComponent.chaosEvolutionPoints,
-                flowPoints: playerComponent.flowEvolutionPoints,
-                orderPoints: playerComponent.orderEvolutionPoints
-            });
-            
-            // Emit event to notify other systems
+            // Emit event to update UI
             this.eventSystem.emit('playerEvolutionPointsChanged', {
-                player: playerComponent,
                 chaosPoints: playerComponent.chaosEvolutionPoints,
                 flowPoints: playerComponent.flowEvolutionPoints,
                 orderPoints: playerComponent.orderEvolutionPoints,
                 totalPoints: playerComponent.evolutionPoints
             });
+            
+            console.log(`Restored evolution points: ${playerComponent.evolutionPoints} total`);
         }
-        
-        console.log(`Restored ${traitIds.length} traits and evolution points from previous level`);
     }
     
     /**
@@ -2238,6 +2412,66 @@ export class Game {
                 chaos: 0.5,
                 order: 0.5
             };
+        }
+    }
+    
+    /**
+     * Get a system by name
+     * @param {string} systemName - Name of the system to get
+     * @returns {Object|null} The system or null if not found
+     */
+    getSystem(systemName) {
+        switch (systemName) {
+            case 'evolutionSystem':
+                return this.evolutionSystem;
+                
+            case 'metricsSystem':
+                return this.metricsSystem;
+                
+            case 'turnSystem':
+                return this.turnSystem;
+                
+            case 'grid':
+                return this.grid;
+                
+            default:
+                console.warn(`Unknown system requested: ${systemName}`);
+                return null;
+        }
+    }
+    
+    /**
+     * Create and initialize all game entities
+     */
+    createEntities() {
+        console.log("Creating game entities");
+        
+        try {
+            // Create player entity first (at the center)
+            this.createPlayer();
+            
+            // Create and initialize UI Manager if it doesn't exist
+            if (!this.uiManager) {
+                console.log("Creating UIManager");
+                this.uiManager = new UIManager();
+            }
+            
+            // Initialize UI with fresh system references
+            if (this.uiManager) {
+                console.log("Initializing UIManager with grid and turnSystem references");
+                this.uiManager.init({
+                    grid: this.grid,
+                    turnSystem: this.turnSystem
+                });
+            } else {
+                console.warn("UIManager not available, skipping UI initialization");
+            }
+            
+            console.log("Entities created successfully");
+            return true;
+        } catch (error) {
+            console.error("Failed to create entities:", error);
+            return false;
         }
     }
 } 

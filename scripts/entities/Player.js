@@ -42,6 +42,9 @@ class PlayerComponent extends Component {
         
         // Evolution points
         this.evolutionPoints = 0;
+        this.chaosEvolutionPoints = 0;
+        this.flowEvolutionPoints = 0;
+        this.orderEvolutionPoints = 0;
     }
     
     /**
@@ -363,17 +366,51 @@ class PlayerComponent extends Component {
     
     /**
      * Add evolution points
-     * @param {number} points - Number of points to add
+     * @param {string|number} type - Type of points ('chaos', 'flow', 'order') or amount if legacy call
+     * @param {number} amount - Number of points to add
+     * @param {boolean} suppressEvent - Whether to suppress the event emission
      */
-    addEvolutionPoints(points) {
-        this.evolutionPoints += points;
+    addEvolutionPoints(type, amount, suppressEvent = false) {
+        // Check if this is a legacy call with just a number
+        if (typeof type === 'number' && amount === undefined) {
+            amount = type;
+            type = 'legacy';
+        }
         
-        // Emit event
-        eventSystem.emit('playerEvolutionPointsChanged', {
-            player: this,
-            points: this.evolutionPoints,
-            added: points
-        });
+        // Validate the amount
+        if (!amount || amount <= 0) {
+            return;
+        }
+        
+        // Update the appropriate point type
+        if (type === 'chaos') {
+            this.chaosEvolutionPoints += amount;
+        } else if (type === 'flow') {
+            this.flowEvolutionPoints += amount;
+        } else if (type === 'order') {
+            this.orderEvolutionPoints += amount;
+        } else {
+            // Legacy support - add to total points
+            this.evolutionPoints += amount;
+        }
+        
+        // Update total points
+        this.evolutionPoints = this.chaosEvolutionPoints + this.flowEvolutionPoints + this.orderEvolutionPoints;
+        
+        // Emit event if not suppressed
+        if (!suppressEvent) {
+            eventSystem.emit('playerEvolutionPointsChanged', {
+                player: this,
+                chaosPoints: this.chaosEvolutionPoints,
+                flowPoints: this.flowEvolutionPoints,
+                orderPoints: this.orderEvolutionPoints,
+                totalPoints: this.evolutionPoints,
+                added: amount,
+                addedType: type
+            });
+        }
+        
+        console.log(`Added ${amount} ${type} evolution points. Total: ${this.evolutionPoints}`);
     }
     
     /**

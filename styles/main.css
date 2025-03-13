@@ -146,20 +146,24 @@ main {
     margin-right: 0.25rem;
 }
 
-.info-box .value {
+.info-box .resource-value {
     font-size: 1.1rem;
     font-weight: bold;
 }
 
-#energy-display .value {
+#energy-display .resource-value {
     color: var(--energy-color);
 }
 
-#order-display .value {
+#movement-display .resource-value {
+    color: var(--accent-color);
+}
+
+#order-display .resource-value {
     color: var(--order-color);
 }
 
-#chaos-display .value {
+#chaos-display .resource-value {
     color: var(--chaos-color);
 }
 
@@ -695,29 +699,27 @@ main {
 /* Evolution points display */
 .evolution-points {
     display: flex;
-    flex-direction: column;
+    justify-content: space-between;
     align-items: center;
 }
 
 .evolution-values {
     display: flex;
-    gap: 6px;
+    gap: 10px;
     align-items: center;
+    font-weight: bold;
 }
 
-.chaos-points {
+.chaos-resource-value {
     color: var(--chaos-color);
-    font-weight: bold;
 }
 
-.flow-points {
-    color: #64dfdf; /* Teal color for flow/balance */
-    font-weight: bold;
+.flow-resource-value {
+    color: var(--energy-color);
 }
 
-.order-points {
+.order-resource-value {
     color: var(--order-color);
-    font-weight: bold;
 }
 
 /* Balance display */
