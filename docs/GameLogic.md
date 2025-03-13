@@ -55,10 +55,18 @@ Entity state is managed through the Entity Component System (ECS):
 2. **Components**: Store state data for specific aspects of entities
 3. **Systems**: Process and update component data
 
+The ECS implementation features:
+- Component lifecycle hooks (constructor, onAttach, init, onEnable, update, onDisable, onDetach, destroy, reset)
+- Component pooling for performance optimization
+- Cached entity queries for efficient entity retrieval
+- Spatial partitioning for position-based queries
+
 This approach allows for:
 - Separation of data (state) from logic
 - Focused components that manage specific aspects of state
 - Flexible composition of entities with different capabilities
+- Efficient memory management through component pooling
+- Optimal performance for entity lookups
 
 ### Player State
 
