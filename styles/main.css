@@ -30,8 +30,8 @@
     /* Dimensions */
     --header-height: 60px;
     --footer-height: 60px;
-    --action-panel-height: 60px;
-    --message-log-height: 200px;
+    --action-panel-height: 80px; /* Increased for desktop */
+    --message-log-height: 300px; /* Increased for desktop */
     
     /* Deep-sea effect variables */
     --deep-glow: rgba(14, 145, 178, 0.1);
@@ -53,6 +53,8 @@ body {
     line-height: 1.6;
     height: 100vh;
     overflow: hidden;
+    min-width: 1024px; /* Minimum width for desktop */
+    min-height: 768px; /* Minimum height for desktop */
 }
 
 h1, h2, h3, h4, h5, h6 {
@@ -178,9 +180,10 @@ main {
         radial-gradient(circle at 10% 20%, rgba(14, 85, 100, 0.05) 0%, transparent 80%),
         radial-gradient(circle at 90% 80%, rgba(18, 110, 130, 0.03) 0%, transparent 70%);
     border-radius: 8px;
-    padding: 0.5rem;
-    box-shadow: inset 0 0 40px var(--abyss-shadow);
+    padding: 1rem; /* Increased padding for desktop */
+    box-shadow: inset 0 0 40px var(--abyss-shadow), 0 5px 15px rgba(0, 0, 0, 0.2); /* Enhanced shadow */
     overflow: hidden;
+    min-height: 500px; /* Set minimum height for desktop */
 }
 
 #grid-container::before {
@@ -197,7 +200,7 @@ main {
     z-index: 1;
 }
 
-/* Adding floating particles for deep sea effect */
+/* Adding enhanced floating particles for deep sea effect - more detailed for desktop */
 #grid-container::after {
     content: '';
     position: absolute;
@@ -206,13 +209,13 @@ main {
     width: 100%;
     height: 100%;
     background-image: 
-        radial-gradient(circle at 20% 30%, rgba(255, 255, 255, 0.02) 0%, transparent 2%),
-        radial-gradient(circle at 40% 70%, rgba(255, 255, 255, 0.01) 0%, transparent 1%),
-        radial-gradient(circle at 60% 20%, rgba(255, 255, 255, 0.03) 0%, transparent 3%),
-        radial-gradient(circle at 80% 50%, rgba(255, 255, 255, 0.02) 0%, transparent 2%),
-        radial-gradient(circle at 10% 80%, rgba(255, 255, 255, 0.03) 0%, transparent 2%),
-        radial-gradient(circle at 30% 50%, rgba(255, 255, 255, 0.01) 0%, transparent 1%),
-        radial-gradient(circle at 70% 90%, rgba(255, 255, 255, 0.02) 0%, transparent 2%);
+        radial-gradient(circle at 20% 30%, rgba(255, 255, 255, 0.03) 0%, transparent 2%),
+        radial-gradient(circle at 40% 70%, rgba(255, 255, 255, 0.02) 0%, transparent 1%),
+        radial-gradient(circle at 60% 20%, rgba(255, 255, 255, 0.04) 0%, transparent 3%),
+        radial-gradient(circle at 80% 50%, rgba(255, 255, 255, 0.03) 0%, transparent 2%),
+        radial-gradient(circle at 10% 80%, rgba(255, 255, 255, 0.04) 0%, transparent 2%),
+        radial-gradient(circle at 30% 50%, rgba(255, 255, 255, 0.02) 0%, transparent 1%),
+        radial-gradient(circle at 70% 90%, rgba(255, 255, 255, 0.03) 0%, transparent 2%);
     pointer-events: none;
     animation: floatParticles 60s linear infinite;
     z-index: 3;
@@ -645,55 +648,6 @@ main {
     padding: 12px 20px;
     /* Add a margin to help with spacing when positioned higher */
     margin-bottom: 20px;
-}
-
-/* Responsive adjustments */
-@media (max-width: 768px) {
-    main {
-        grid-template-columns: 1fr;
-        grid-template-rows: auto 1fr auto auto;
-        grid-template-areas:
-            "info"
-            "grid"
-            "actions"
-            "log";
-    }
-    
-    #message-log {
-        max-height: 150px;
-    }
-    
-    .action-btn {
-        padding: 0.4rem 0.6rem;
-        font-size: 0.8rem;
-    }
-    
-    /* Adjust balance bar for mobile */
-    .balance-container {
-        min-width: unset;
-        width: 100%;
-    }
-    
-    .balance-bar {
-        height: 10px;
-    }
-    
-    .balance-marker {
-        height: 14px;
-        top: -2px;
-    }
-    
-    .balance-bar-label {
-        font-size: 0.7rem;
-    }
-    
-    /* Ensure feedback message stays properly centered on mobile */
-    #feedback-message {
-        max-width: 90%;
-        bottom: 150px; /* Slightly higher on mobile for better visibility */
-        left: 50%; /* Match desktop positioning */
-        transform: translateX(-50%) translateX(-300px); /* Match desktop adjustment */
-    }
 }
 
 /* Evolution points display */
@@ -1269,37 +1223,6 @@ main {
     transform: translateY(-2px);
 }
 
-/* Responsive styling for stats screen */
-@media (max-width: 768px) {
-    .stat-columns {
-        grid-template-columns: 1fr;
-    }
-    
-    .stats-tab {
-        padding: 8px 15px;
-        font-size: 0.9rem;
-    }
-    
-    .journey-count {
-        font-size: 1.5rem;
-    }
-    
-    .stats-container {
-        max-height: 50vh;
-    }
-    
-    .achievement {
-        flex-direction: column;
-        align-items: flex-start;
-    }
-    
-    .achievement-progress {
-        width: 100%;
-        margin-left: 0;
-        margin-top: 10px;
-    }
-}
-
 /* Evolution Screen Styles */
 .evolution-header {
     text-align: center;
@@ -1615,4 +1538,26 @@ main {
 /* Ensure hex grid elements are positioned correctly */
 .hex-grid {
     z-index: 50; /* Above background effects, below feedback messages */
+}
+
+/* Add screen-size warning for very small screens */
+.screen-size-warning {
+    display: none;
+}
+
+@media (max-width: 1024px) {
+    .screen-size-warning {
+        display: block;
+        text-align: center;
+        padding: 20px;
+        background-color: var(--dark-color);
+        color: var(--light-color);
+        font-size: 1.2rem;
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        z-index: 9999;
+    }
 } 

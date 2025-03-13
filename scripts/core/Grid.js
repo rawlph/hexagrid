@@ -272,8 +272,8 @@ export class Grid {
         const tileProbabilities = this.getTileProbabilities();
         
         // Hex dimensions and spacing
-        const hexWidth = 70;  // Width of a hex tile
-        const hexHeight = 80; // Height of a hex tile
+        const hexWidth = 80;  // Updated from 70px to match CSS
+        const hexHeight = 92; // Updated from 80px to match CSS
         
         // Calculate proper spacing for a honeycomb pattern
         // For pointy-top hexagons:
