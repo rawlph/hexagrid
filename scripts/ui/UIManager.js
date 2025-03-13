@@ -173,15 +173,29 @@ export class UIManager {
             </div>`
         );
         
-        // Set up confirmation button handlers
-        document.getElementById('confirm-new-game').addEventListener('click', () => {
-            this.closeModalDialog();
-            this.startNewGame(gridSize);
-        });
-        
-        document.getElementById('cancel-new-game').addEventListener('click', () => {
-            this.closeModalDialog();
-        });
+        // Wait for a short time to ensure the modal is rendered before attaching event listeners
+        setTimeout(() => {
+            // Check if the buttons exist before attaching listeners
+            const confirmButton = document.getElementById('confirm-new-game');
+            const cancelButton = document.getElementById('cancel-new-game');
+            
+            if (confirmButton) {
+                confirmButton.addEventListener('click', () => {
+                    this.closeModalDialog();
+                    this.startNewGame(gridSize);
+                });
+            } else {
+                console.error("Confirm button not found in modal");
+            }
+            
+            if (cancelButton) {
+                cancelButton.addEventListener('click', () => {
+                    this.closeModalDialog();
+                });
+            } else {
+                console.error("Cancel button not found in modal");
+            }
+        }, 50); // Short delay to allow DOM to update
     }
     
     /**
@@ -453,8 +467,20 @@ export class UIManager {
      * @param {object} data - Energy change data
      */
     updateEnergyDisplay(data) {
+        console.log("Energy display update:", data);
+        
         if (this.energyDisplay) {
-            this.energyDisplay.textContent = data.currentEnergy;
+            // Check for different property names for compatibility
+            const energyValue = data.newEnergy !== undefined ? data.newEnergy : 
+                               (data.currentEnergy !== undefined ? data.currentEnergy : null);
+            
+            if (energyValue !== null) {
+                this.energyDisplay.textContent = energyValue;
+            } else {
+                console.warn("Energy update received without energy value");
+            }
+        } else {
+            console.warn("Energy display element not found");
         }
     }
     

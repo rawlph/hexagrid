@@ -277,8 +277,13 @@ export class PlayerComponent {
      * @returns {boolean} Whether enough energy was available
      */
     useEnergy(amount) {
+        console.log(`PlayerComponent.useEnergy: Using ${amount} energy, current energy: ${this.energy}`);
+        
         // Check if we have enough energy
-        if (this.energy < amount) return false;
+        if (this.energy < amount) {
+            console.warn(`Not enough energy for action: have ${this.energy}, need ${amount}`);
+            return false;
+        }
         
         // Store old energy value
         const oldEnergy = this.energy;
@@ -286,14 +291,16 @@ export class PlayerComponent {
         // Deduct energy
         this.energy = Math.max(0, this.energy - amount);
         
-        // Emit energy changed event
+        // Emit energy changed event with multiple property names for compatibility
         eventSystem.emit('playerEnergyChanged', {
             player: this,
             oldEnergy: oldEnergy,
             newEnergy: this.energy,
+            currentEnergy: this.energy,  // For backward compatibility
             delta: this.energy - oldEnergy
         });
         
+        console.log(`Energy updated: ${oldEnergy} -> ${this.energy} (delta: ${this.energy - oldEnergy})`);
         return true;
     }
     

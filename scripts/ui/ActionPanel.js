@@ -398,8 +398,8 @@ export class ActionPanel {
             (row === playerComponent.row && col === playerComponent.col) || 
             playerComponent.isAdjacentTo(row, col);
             
-        if (!isAdjacentOrSame) {
-            this.showFeedback(`Cannot ${action} to that tile - too far away`, 'warning', 2000, false, 'action-invalid');
+        if (!isAdjacentOrSame && action !== 'move') {
+            this.showFeedback(`Cannot ${action} a non-adjacent tile.`, 'warning', 2000, false, 'action-invalid');
             return;
         }
         
@@ -412,7 +412,7 @@ export class ActionPanel {
         
         const tileComponent = tileEntity.getComponent(TileComponent);
         if (!tileComponent) {
-            console.error("Tile has no TileComponent");
+            console.error(`No TileComponent found for tile at (${row}, ${col})`);
             return;
         }
         
@@ -455,25 +455,27 @@ export class ActionPanel {
                 } else if (action === 'stabilize') {
                     success = this.executeStabilizeAction(playerComponent, tileComponent, row, col, energyCost);
                 }
-                feedbackShown = true;
                 break;
                 
             default:
-                this.showFeedback(`Unknown action: ${action}`, 'error', 2000, false, 'action-error');
+                this.showFeedback(`Unknown action: ${action}`, 'warning', 2000, false, 'action-invalid');
                 return;
         }
         
-        // Only provide general feedback if specific feedback wasn't already shown
-        if (success && !feedbackShown) {
-            this.provideActionFeedback(action, success, `${action} successful`);
-        } else if (!success && !feedbackShown) {
+        // Provide feedback if not already shown
+        if (!feedbackShown && !success) {
             this.provideActionFeedback(action, success, `${action} failed`);
         }
         
         // If action was successful, handle resource changes
         if (success) {
+            // Log energy before consumption
+            console.log(`Before energy consumption: Player energy = ${playerComponent.energy}, Cost = ${energyCost}`);
+            
             // Use energy
-            playerComponent.useEnergy(energyCost);
+            const energyUsed = playerComponent.useEnergy(energyCost);
+            
+            console.log(`After energy consumption: Success = ${energyUsed}, New energy = ${playerComponent.energy}`);
             
             // Use movement point
             playerComponent.useMovementPoint();
