@@ -221,15 +221,13 @@ export class UIManager {
         
         switch(resourceType) {
             case 'energy':
-                return data.energy !== undefined ? data.energy : 
-                      (data.newEnergy !== undefined ? data.newEnergy : 
-                      (data.currentEnergy !== undefined ? data.currentEnergy : 0));
+                // Standardized property name is simply 'energy'
+                return data.energy || 0;
             case 'movement':
-                return data.movementPoints !== undefined ? data.movementPoints : 
-                      (data.newPoints !== undefined ? data.newPoints : 
-                      (data.newMovementPoints !== undefined ? data.newMovementPoints : 0));
+                // Standardized property name is 'movementPoints'
+                return data.movementPoints || 0;
             case 'turn':
-                return data.turnCount !== undefined ? data.turnCount : 0;
+                return data.turnCount || 0;
             default:
                 console.warn(`No value extractor defined for resource type: ${resourceType}`);
                 return 0;
@@ -254,24 +252,6 @@ export class UIManager {
         if (this.debugMode) {
             console.log(`Updated ${resourceType} display to ${value}`, data);
         }
-    }
-    
-    /**
-     * Update the energy display
-     * @param {object} data - Energy change data
-     * @deprecated Use updateResourceDisplay('energy', data) instead
-     */
-    updateEnergyDisplay(data) {
-        this.updateResourceDisplay('energy', data);
-    }
-    
-    /**
-     * Update the movement points display
-     * @param {object} data - Movement points data
-     * @deprecated Use updateResourceDisplay('movement', data) instead
-     */
-    updateMovementPointsDisplay(data) {
-        this.updateResourceDisplay('movement', data);
     }
     
     /**
@@ -597,12 +577,9 @@ export class UIManager {
      * @param {object} data - Balance data
      */
     updateBalanceDisplay(data) {
-        // Handle different property naming formats for backward compatibility
-        let chaosValue = typeof data.chaos !== 'undefined' ? data.chaos : 
-                        (typeof data.systemChaos !== 'undefined' ? data.systemChaos : 0.5);
-        
-        let orderValue = typeof data.order !== 'undefined' ? data.order : 
-                        (typeof data.systemOrder !== 'undefined' ? data.systemOrder : 0.5);
+        // Use standardized property names - chaos and order
+        let chaosValue = data.chaos || 0.5;
+        let orderValue = data.order || 0.5;
         
         // Ensure values are valid numbers
         chaosValue = !isNaN(chaosValue) ? chaosValue : 0.5;
@@ -616,7 +593,7 @@ export class UIManager {
         const chaosPct = Math.round(chaosValue * 100);
         const orderPct = Math.round(orderValue * 100);
         
-        // Update display values - only update the balance displays, not evolution points
+        // Update display values
         if (this.balanceChaosDisplay) {
             this.balanceChaosDisplay.textContent = chaosPct;
         }

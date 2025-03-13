@@ -160,27 +160,11 @@ export class EventSystem {
         // Add standardization flag
         normalized.isStandardized = eventType.includes(':');
         
-        // Normalize player resource change events
+        // Note: Legacy normalization code for oldPoints, newPoints, oldEnergy, etc. has been removed
+        // since all components now use standardized event data formats
+        
+        // Ensure delta exists for resource change events
         if (eventType.includes('player:resource:changed')) {
-            // Movement points normalization
-            if ('oldPoints' in normalized && !('oldMovementPoints' in normalized)) {
-                normalized.oldMovementPoints = normalized.oldPoints;
-            }
-            if ('newPoints' in normalized && !('movementPoints' in normalized)) {
-                normalized.movementPoints = normalized.newPoints;
-            }
-            
-            // Energy normalization
-            if ('oldEnergy' in normalized && !('oldValue' in normalized)) {
-                normalized.oldValue = normalized.oldEnergy;
-            }
-            if ('newEnergy' in normalized && !('newValue' in normalized)) {
-                normalized.newValue = normalized.newEnergy;
-            } else if ('energy' in normalized && !('newValue' in normalized)) {
-                normalized.newValue = normalized.energy;
-            }
-            
-            // Ensure delta exists
             if (!('delta' in normalized) && 'newValue' in normalized && 'oldValue' in normalized) {
                 normalized.delta = normalized.newValue - normalized.oldValue;
             }

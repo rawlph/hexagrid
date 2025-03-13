@@ -358,51 +358,45 @@ export class Game {
      * Update the UI with current values
      */
     updateUI() {
-        // Skip if UI Manager isn't ready
-        if (!this.uiManager) {
-            console.warn("Cannot update UI: UIManager not initialized");
-            return;
-        }
+        // Skip if UI manager isn't initialized
+        if (!this.uiManager) return;
         
-        // Get player entity
+        // Update UI with player stats
         const playerEntity = this.entityManager.getEntitiesByTag('player')[0];
         if (playerEntity) {
             const playerComponent = playerEntity.getComponent(PlayerComponent);
             if (playerComponent) {
-                // Update energy display via UIManager
-                this.uiManager.updateEnergyDisplay({
-                    energy: playerComponent.energy,
-                    // Legacy property for backward compatibility
-                    currentEnergy: playerComponent.energy,
-                    maxEnergy: playerComponent.maxEnergy
+                // Update energy display with standardized property names
+                this.uiManager.updateResourceDisplay('energy', {
+                    energy: playerComponent.energy
                 });
                 
-                // Update movement points display via UIManager
-                this.uiManager.updateMovementPointsDisplay({
-                    newPoints: playerComponent.movementPoints,
-                    maxPoints: playerComponent.maxMovementPoints
+                // Update movement points display with standardized property names
+                this.uiManager.updateResourceDisplay('movement', {
+                    movementPoints: playerComponent.movementPoints
                 });
                 
-                // Update evolution points display via UIManager
+                // Update evolution points display
                 this.uiManager.updateEvolutionPointsDisplay({
                     chaosPoints: playerComponent.chaosEvolutionPoints,
                     flowPoints: playerComponent.flowEvolutionPoints,
-                    orderPoints: playerComponent.orderEvolutionPoints
+                    orderPoints: playerComponent.orderEvolutionPoints,
+                    totalPoints: playerComponent.chaosEvolutionPoints + 
+                                playerComponent.flowEvolutionPoints + 
+                                playerComponent.orderEvolutionPoints
                 });
             }
         }
         
-        // Update turn display via UIManager
+        // Update turn display
         this.uiManager.updateTurnDisplay({
-            turnCount: this.turnSystem.turnCount,
-            maxTurns: this.turnSystem.maxTurns
+            turnCount: this.turnSystem ? this.turnSystem.turnCount : 0
         });
         
-        // Update balance display via UIManager
-        const balance = this.grid.getSystemBalance();
+        // Update balance display with standardized property names
         this.uiManager.updateBalanceDisplay({
-            chaos: balance.chaos,
-            order: balance.order
+            chaos: this.grid ? this.grid.systemChaos : 0.5,
+            order: this.grid ? this.grid.systemOrder : 0.5
         });
     }
     
@@ -2041,9 +2035,10 @@ export class Game {
         
         // IMPORTANT: Also ensure the player component has the same values
         // This ensures that when we transition between levels, the correct values are saved
+        let playerComponent = null;
         const playerEntity = this.entityManager.getEntitiesByTag('player')[0];
         if (playerEntity) {
-            const playerComponent = playerEntity.getComponent(PlayerComponent);
+            playerComponent = playerEntity.getComponent(PlayerComponent);
             if (playerComponent) {
                 // Sync evolution points with the data object
                 playerComponent.chaosEvolutionPoints = data.chaosPoints;
@@ -2103,7 +2098,7 @@ export class Game {
             EventTypes.PLAYER_EVOLUTION_POINTS_CHANGED.legacy,
             EventTypes.PLAYER_EVOLUTION_POINTS_CHANGED.standard,
             {
-                player: playerComponent,
+                player: playerComponent, // This will be null if player entity wasn't found
                 chaosPoints: data.chaosPoints,
                 flowPoints: data.flowPoints,
                 orderPoints: data.orderPoints,
