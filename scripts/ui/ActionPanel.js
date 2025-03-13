@@ -32,6 +32,9 @@ export class ActionPanel {
         
         // Event listeners
         this._registeredEvents = [];
+        
+        // Mark as initialized
+        this._initialized = false;
     }
     
     /**
@@ -44,8 +47,12 @@ export class ActionPanel {
     init(messageSystem, options = {}) {
         console.log("Initializing action panel");
         
-        // Clean up any previous initialization first
-        this.destroy();
+        // Only clean up if this isn't the first initialization
+        // This prevents the destroy-recreate cycle
+        if (this._initialized) {
+            // Clean up any previous initialization
+            this.destroy();
+        }
         
         // Reset click handlers
         this.clickHandlers = {};
@@ -94,6 +101,9 @@ export class ActionPanel {
         
         // Reset the current action
         this.currentAction = null;
+        
+        // Mark as initialized
+        this._initialized = true;
     }
     
     /**

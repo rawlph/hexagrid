@@ -182,22 +182,26 @@ export class Game {
         // Listen for tile clicks - using context-based binding
         this.eventSystem.on('tileClicked', this.handleTileClick, this);
         
-        // Listen for turn end action - Fix the end turn button
-        const endTurnBtn = document.getElementById('end-turn-btn');
-        if (endTurnBtn) {
-            console.log("Setting up end turn button listener");
-            
-            // Remove any existing listeners by cloning the button
-            const newEndTurnBtn = endTurnBtn.cloneNode(true);
-            endTurnBtn.parentNode.replaceChild(newEndTurnBtn, endTurnBtn);
-            
-            // Add the listener - use a simple function that calls our endTurn method
-            newEndTurnBtn.addEventListener('click', () => {
-                console.log('End turn button clicked');
-                this.endTurn();
-            });
+        // Listen for turn end action - Only set up if ActionPanel isn't handling it
+        if (!window.actionPanel || !window.actionPanel._initialized) {
+            const endTurnBtn = document.getElementById('end-turn-btn');
+            if (endTurnBtn) {
+                console.log("Setting up end turn button listener (fallback)");
+                
+                // Remove any existing listeners by cloning the button
+                const newEndTurnBtn = endTurnBtn.cloneNode(true);
+                endTurnBtn.parentNode.replaceChild(newEndTurnBtn, endTurnBtn);
+                
+                // Add the listener - use a simple function that calls our endTurn method
+                newEndTurnBtn.addEventListener('click', () => {
+                    console.log('End turn button clicked (fallback handler)');
+                    this.endTurn();
+                });
+            } else {
+                console.warn("End turn button not found");
+            }
         } else {
-            console.warn("End turn button not found");
+            console.log("ActionPanel is handling the end turn button, skipping fallback setup");
         }
         
         // NOTE: We've moved UI update event listeners to UIManager to avoid duplicates
@@ -213,6 +217,12 @@ export class Game {
         
         // Listen for evolution ready state
         this.eventSystem.on('evolutionReady', this.handleEvolutionReady.bind(this));
+        
+        // Listen for ActionPanel ready event to reconfigure buttons if needed
+        this.eventSystem.on('actionPanelReady', (data) => {
+            console.log("ActionPanel is now ready, button handling is fully delegated");
+            // Buttons are automatically set up by ActionPanel, no need to reconfigure
+        });
         
         // Set up new game button
         const newGameBtn = document.getElementById('new-game-btn');
@@ -241,9 +251,10 @@ export class Game {
         // This method is kept for compatibility but no longer directly sets up button handlers
         console.log("Action button handling delegated to ActionPanel");
         
-        // Fallback setup only if ActionPanel is not available
-        if (!window.actionPanel) {
-            console.warn("ActionPanel not available, using fallback button setup");
+        // Only use fallback if ActionPanel is truly not available
+        // Check for both existence and initialization flag
+        if (!window.actionPanel || !window.actionPanel._initialized) {
+            console.log("ActionPanel not initialized yet during Game startup - using temporary fallback button setup. ActionPanel will take over shortly.");
             const actions = ['move', 'sense', 'interact', 'stabilize'];
             
             // First remove any existing listeners from ALL buttons
@@ -265,6 +276,8 @@ export class Game {
                     });
                 }
             });
+        } else {
+            console.log("Using ActionPanel for button handling, skipping fallback setup");
         }
     }
     

@@ -64,20 +64,32 @@ export class UIManager {
             console.warn("UIManager initialized without grid or turn system");
         }
         
-        // Initialize action panel with dependencies
-        this.actionPanel.init(this.messageSystem, {
-            grid: this.grid,
-            turnSystem: this.turnSystem
-        });
-        
-        // Make sure the global reference is updated
-        window.actionPanel = this.actionPanel;
-        
         // Set up button listeners
         this.setupButtonListeners();
         
         // Register event listeners
         this.registerEventListeners();
+        
+        // Initialize action panel with dependencies - AFTER everything else is set up
+        // This ensures proper order of initialization
+        setTimeout(() => {
+            this.actionPanel.init(this.messageSystem, {
+                grid: this.grid,
+                turnSystem: this.turnSystem
+            });
+            
+            // Make sure the global reference is updated
+            window.actionPanel = this.actionPanel;
+            
+            console.log("ActionPanel initialized in UIManager");
+            
+            // Emit event to notify systems that ActionPanel is ready
+            eventSystem.emit('actionPanelReady', {
+                actionPanel: this.actionPanel
+            });
+        }, 0);
+        
+        return true;
     }
     
     /**
