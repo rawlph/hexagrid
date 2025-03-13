@@ -760,19 +760,21 @@ export class Game {
                 );
                 console.log("Explicitly updating UI with reset evolution points");
                 
-                // Explicitly update UI with current player stats
-                // This ensures the UI is updated immediately after game restart
-                if (this.uiManager) {
-                    this.uiManager.updateResourceDisplay('energy', {
-                        energy: playerComponent.energy
-                    });
-                    
-                    this.uiManager.updateResourceDisplay('movement', {
-                        movementPoints: playerComponent.movementPoints
-                    });
-                }
+                // Reset components in player entity
+                playerComponent.traits = [];
+                playerComponent.abilities = [];
+                playerComponent.exploredTiles = 0;
+                playerComponent.tilesStabilized = 0;
+                playerComponent.tilesDestabilized = 0;
+                playerComponent.movesMade = 0;
+                playerComponent.energyUsed = 0;
             }
         }
+        
+        // Explicitly update UI to refresh the turn counter and all displays
+        this.updateUI();
+        
+        return true;
     }
     
     /**
