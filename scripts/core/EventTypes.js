@@ -224,6 +224,14 @@ export const EventTypes = {
             message: 'Use player:trait:purchased instead. The legacy traitPurchased event will be removed in v2.0'
         }
     },
+    PLAYER_TRAIT_PURCHASED: {
+        legacy: 'playerTraitPurchased',
+        standard: 'player:trait:purchased:ui',
+        deprecation: {
+            version: '2.0.0',
+            message: 'Use player:trait:purchased:ui instead. The legacy playerTraitPurchased event will be removed in v2.0'
+        }
+    },
     EVOLUTION_SYSTEM_RESET: {
         legacy: 'evolutionSystemReset',
         standard: 'system:evolution:reset',

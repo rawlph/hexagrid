@@ -156,34 +156,22 @@ export class UIManager {
                 data => this.updateResourceDisplay('movement', data))
         );
         
-        // For backward compatibility, listen to legacy events only if they don't have standardized equivalents
-        // This is a transitional approach until all emitters are updated
-        this._registeredEvents.push(
-            eventSystem.on(EventTypes.PLAYER_ENERGY_CHANGED.legacy, 
-                data => this.updateResourceDisplay('energy', data))
-        );
-        
-        this._registeredEvents.push(
-            eventSystem.on(EventTypes.PLAYER_MOVEMENT_POINTS_CHANGED.legacy, 
-                data => this.updateResourceDisplay('movement', data))
-        );
-        
-        // Turn changes - using legacy event until migrated
+        // Turn system events
         this._registeredEvents.push(
             eventSystem.on(EventTypes.TURN_START.standard, this.updateTurnDisplay.bind(this))
         );
         
-        // System balance changes
+        // System balance events
         this._registeredEvents.push(
             eventSystem.on(EventTypes.SYSTEM_BALANCE_CHANGED.standard, this.updateBalanceDisplay.bind(this))
         );
         
-        // Evolution points changes
+        // Evolution points events - updated to use standardized event
         this._registeredEvents.push(
-            eventSystem.on(EventTypes.PLAYER_EVOLUTION_POINTS_CHANGED.legacy, this.updateEvolutionPointsDisplay.bind(this))
+            eventSystem.on(EventTypes.PLAYER_EVOLUTION_POINTS_CHANGED.standard, this.updateEvolutionPointsDisplay.bind(this))
         );
         
-        // Game state changes
+        // Game state events
         this._registeredEvents.push(
             eventSystem.on(EventTypes.GAME_VICTORY.standard, this.showVictoryScreen.bind(this))
         );

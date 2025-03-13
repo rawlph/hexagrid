@@ -191,7 +191,7 @@ export class Game {
         console.log("Setting up Game event listeners");
         
         // Listen for tile clicks - using context-based binding
-        this.eventSystem.on('tileClicked', this.handleTileClick, this);
+        this.eventSystem.on(EventTypes.TILE_CLICKED.standard, this.handleTileClick, this);
         
         // Listen for turn end action - Only set up if ActionPanel isn't handling it
         if (!window.actionPanel || !window.actionPanel._initialized) {
@@ -224,13 +224,13 @@ export class Game {
         // - playerEvolutionPointsChanged
         
         // However, we'll still listen for evolutionPointsAwarded for game logic
-        this.eventSystem.on('evolutionPointsAwarded', this.showEvolutionPointsMessage.bind(this));
+        this.eventSystem.on(EventTypes.EVOLUTION_POINTS_AWARDED.standard, this.showEvolutionPointsMessage.bind(this));
         
         // Listen for evolution ready state
-        this.eventSystem.on('evolutionReady', this.handleEvolutionReady.bind(this));
+        this.eventSystem.on(EventTypes.EVOLUTION_READY.standard, this.handleEvolutionReady.bind(this));
         
         // Listen for ActionPanel ready event to reconfigure buttons if needed
-        this.eventSystem.on('actionPanelReady', (data) => {
+        this.eventSystem.on(EventTypes.ACTION_PANEL_READY.standard, (data) => {
             console.log("ActionPanel is now ready, button handling is fully delegated");
             // Buttons are automatically set up by ActionPanel, no need to reconfigure
         });
@@ -785,9 +785,9 @@ export class Game {
         
         // Store references to all events we need to unregister
         const eventsToUnregister = [
-            { event: 'tileClicked', handler: this.handleTileClick, context: this },
-            { event: 'evolutionPointsAwarded', handler: this.showEvolutionPointsMessage },
-            { event: 'evolutionReady', handler: this.handleEvolutionReady }
+            { event: EventTypes.TILE_CLICKED.standard, handler: this.handleTileClick, context: this },
+            { event: EventTypes.EVOLUTION_POINTS_AWARDED.standard, handler: this.showEvolutionPointsMessage },
+            { event: EventTypes.EVOLUTION_READY.standard, handler: this.handleEvolutionReady }
         ];
         
         // Unregister all events
@@ -1987,6 +1987,17 @@ export class Game {
         
         // Also add message to log
         this.addLogMessage(`You acquired the ${trait.name} trait!`);
+        
+        // Emit UI event for trait purchase (for MessageSystem)
+        this.eventSystem.emitStandardized(
+            EventTypes.PLAYER_TRAIT_PURCHASED.legacy,
+            EventTypes.PLAYER_TRAIT_PURCHASED.standard,
+            {
+                trait: trait,
+                player: playerComponent,
+                isStandardized: true
+            }
+        );
         
         // Emit point change event to update all UI elements
         this.eventSystem.emitStandardized(

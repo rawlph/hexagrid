@@ -175,11 +175,11 @@ export class EvolutionSystem {
         
         // Register event listeners
         this._registeredEvents.push(
-            eventSystem.on('gameVictory', this.onLevelCompleted.bind(this))
+            eventSystem.on(EventTypes.GAME_VICTORY.standard, this.onLevelCompleted.bind(this))
         );
         
         this._registeredEvents.push(
-            eventSystem.on('playerEvolutionPointsChanged', this.onEvolutionPointsChanged.bind(this))
+            eventSystem.on(EventTypes.PLAYER_EVOLUTION_POINTS_CHANGED.standard, this.onEvolutionPointsChanged.bind(this))
         );
     }
     

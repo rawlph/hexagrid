@@ -169,14 +169,14 @@ class MessageSystem {
         );
         
         this._registeredEvents.push(
-            eventSystem.on('playerTraitPurchased', data => {
+            eventSystem.on(EventTypes.PLAYER_TRAIT_PURCHASED.standard, data => {
                 this.addLogMessage(`Acquired trait: ${data.trait.name}`, "event");
             })
         );
         
         // Achievement events - updated to use standardized event names
         this._registeredEvents.push(
-            eventSystem.on('achievementsCompleted', data => {
+            eventSystem.on(EventTypes.ACHIEVEMENTS_COMPLETED.standard, data => {
                 data.achievements.forEach(achievement => {
                     this.addLogMessage(`Achievement unlocked: ${achievement.name}`, "event");
                     this.showFeedbackMessage(`Achievement: ${achievement.name}`, 3000, 'achievement', 'achievement');

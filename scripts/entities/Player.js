@@ -68,7 +68,7 @@ class PlayerComponent extends Component {
         this.createCharacterToken();
         
         // Register for turn events
-        eventSystem.on('turnStart', this.onTurnStart.bind(this));
+        eventSystem.on(EventTypes.TURN_START.standard, this.onTurnStart.bind(this));
     }
     
     /**

@@ -73,63 +73,62 @@ export class MetricsSystem {
     registerEventListeners() {
         // Player movement
         this._registeredEvents.push(
-            eventSystem.on('playerMoved', this.onPlayerMoved.bind(this))
+            eventSystem.on(EventTypes.PLAYER_MOVED.standard, this.onPlayerMoved.bind(this))
         );
         
         // Tile exploration
         this._registeredEvents.push(
-            eventSystem.on('tileExplored', this.onTileExplored.bind(this))
+            eventSystem.on(EventTypes.TILE_EXPLORED.standard, this.onTileExplored.bind(this))
         );
         
-        // Actions - remove legacy event listeners
-        // Only keep standardized event listeners
+        // Actions - already using standardized event listeners
         this._registeredEvents.push(
-            eventSystem.on('action:complete:sense', this.onSenseComplete.bind(this))
-        );
-        
-        this._registeredEvents.push(
-            eventSystem.on('action:complete:interact', this.onInteractComplete.bind(this))
+            eventSystem.on(EventTypes.ACTION_COMPLETE_SENSE.standard, this.onSenseComplete.bind(this))
         );
         
         this._registeredEvents.push(
-            eventSystem.on('action:complete:stabilize', this.onStabilizeComplete.bind(this))
+            eventSystem.on(EventTypes.ACTION_COMPLETE_INTERACT.standard, this.onInteractComplete.bind(this))
         );
         
         this._registeredEvents.push(
-            eventSystem.on('action:complete:move', this.onPlayerMoved.bind(this))
+            eventSystem.on(EventTypes.ACTION_COMPLETE_STABILIZE.standard, this.onStabilizeComplete.bind(this))
+        );
+        
+        this._registeredEvents.push(
+            eventSystem.on(EventTypes.ACTION_COMPLETE_MOVE.standard, this.onPlayerMoved.bind(this))
         );
         
         // Resource usage
         this._registeredEvents.push(
-            eventSystem.on('playerEnergyChanged', this.onPlayerEnergyChanged.bind(this))
+            eventSystem.on(EventTypes.PLAYER_ENERGY_CHANGED.standard, this.onPlayerEnergyChanged.bind(this))
         );
         
         this._registeredEvents.push(
-            eventSystem.on('playerMovementPointsChanged', this.onPlayerMovementPointsChanged.bind(this))
+            eventSystem.on(EventTypes.PLAYER_MOVEMENT_POINTS_CHANGED.standard, this.onPlayerMovementPointsChanged.bind(this))
         );
         
         // Chaos/Order changes
         this._registeredEvents.push(
-            eventSystem.on('tileChaosChanged', this.onTileChaosChanged.bind(this))
+            eventSystem.on(EventTypes.TILE_CHAOS_CHANGED.standard, this.onTileChaosChanged.bind(this))
         );
         
         // Turn tracking
         this._registeredEvents.push(
-            eventSystem.on('turnEnd', this.onTurnEnd.bind(this))
+            eventSystem.on(EventTypes.TURN_END.standard, this.onTurnEnd.bind(this))
         );
         
         // Evolution
         this._registeredEvents.push(
-            eventSystem.on('playerEvolutionPointsChanged', this.onPlayerEvolutionPointsChanged.bind(this))
+            eventSystem.on(EventTypes.PLAYER_EVOLUTION_POINTS_CHANGED.standard, this.onPlayerEvolutionPointsChanged.bind(this))
         );
         
         this._registeredEvents.push(
-            eventSystem.on('playerTraitAdded', this.onPlayerTraitAdded.bind(this))
+            eventSystem.on(EventTypes.PLAYER_TRAIT_ADDED.standard, this.onPlayerTraitAdded.bind(this))
         );
         
         // Game completion
         this._registeredEvents.push(
-            eventSystem.on('gameVictory', this.onGameVictory.bind(this))
+            eventSystem.on(EventTypes.GAME_VICTORY.standard, this.onGameVictory.bind(this))
         );
     }
     

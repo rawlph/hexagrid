@@ -31,7 +31,13 @@ export class EventSystem {
         // Migration control
         this.disableLegacyEvents = false; // Master switch to disable all legacy events
         this.disabledLegacyEventTypes = new Set(); // Specific legacy events to disable
-        this.fullyMigratedEvents = new Set(); // Events that have been fully migrated
+        this.fullyMigratedEvents = new Set([
+            // Mark action complete events as fully migrated
+            'moveComplete',
+            'senseComplete',
+            'interactComplete', 
+            'stabilizeComplete'
+        ]); // Events that have been fully migrated
         
         // Listener statistics for migration tracking
         this.listenerStatistics = {

@@ -130,8 +130,10 @@ export class TurnSystem {
      * Register event listeners
      */
     registerEventListeners() {
-        // Listen for balance changes
-        eventSystem.on('tileChaosChanged', this.onTileChaosChanged, this);
+        // Track tile chaos changes to monitor system balance
+        this._registeredEvents.push(
+            eventSystem.on(EventTypes.TILE_CHAOS_CHANGED.standard, this.onTileChaosChanged, this)
+        );
     }
     
     /**
