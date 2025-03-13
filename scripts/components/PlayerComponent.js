@@ -56,6 +56,33 @@ export class PlayerComponent extends Component {
     }
     
     /**
+     * Called after the component is attached to an entity
+     */
+    onAttach() {
+        // Create marker element
+        this.createPlayerMarker();
+        
+        // Add player tag if not already added
+        if (!this.entity.hasTag('player')) {
+            this.entity.addTag('player');
+        }
+    }
+    
+    /**
+     * Called before the component is detached from an entity
+     */
+    onDetach() {
+        // Remove event listeners
+        this.clearEventListeners();
+        
+        // Remove marker element
+        if (this.markerElement) {
+            this.markerElement.remove();
+            this.markerElement = null;
+        }
+    }
+    
+    /**
      * Initialize the player component
      */
     init() {
@@ -895,4 +922,46 @@ export class PlayerComponent extends Component {
         
         return Math.max(0, cost);
     }
-} 
+    
+    /**
+     * Reset component state for reuse from pool
+     * @param {number} startRow - Starting grid row position
+     * @param {number} startCol - Starting grid column position
+     */
+    reset(startRow = 0, startCol = 0) {
+        // Reset position
+        this.row = startRow;
+        this.col = startCol;
+        
+        // Reset resources
+        this.energy = 10;
+        this.maxEnergy = 10;
+        this.movementPoints = 3;
+        this.maxMovementPoints = 3;
+        
+        // Reset evolution
+        this.evolutionPoints = 0;
+        this.chaosEvolutionPoints = 0;
+        this.flowEvolutionPoints = 0;
+        this.orderEvolutionPoints = 0;
+        this.traits = [];
+        
+        // Reset action state
+        this.currentAction = null;
+        
+        // Reset stats tracking
+        this.tilesExplored = 0;
+        this.movesMade = 0;
+        this.actionsPerformed = 0;
+        this.turnsCompleted = 0;
+        
+        // Reset DOM elements
+        this.markerElement = null;
+        
+        // Reset event listeners
+        this.boundEventListeners = {};
+        
+        // Reset to enabled state
+        this.enabled = true;
+    }
+}

@@ -43,6 +43,103 @@ export class TileComponent extends Component {
     }
     
     /**
+     * Called after the component is attached to an entity
+     * This happens after constructor but before init
+     */
+    onAttach() {
+        // Register with any global systems if needed
+        // This is called automatically by Entity.addComponent
+    }
+    
+    /**
+     * Called before the component is detached from an entity
+     * This happens before destroy when removing a component
+     */
+    onDetach() {
+        // Clean up any external references
+        // Release DOM elements if we're keeping references
+        if (this.element) {
+            // Don't actually remove the element, just clean up references
+            // The element might be managed elsewhere
+        }
+    }
+    
+    /**
+     * Initialize the component
+     * Called by entity.init()
+     */
+    init() {
+        // Apply visual styles based on type
+        this.updateVisualState();
+    }
+    
+    /**
+     * Called when component is enabled
+     */
+    onEnable() {
+        // Update visual state when enabled
+        if (this.element) {
+            this.element.classList.remove('disabled');
+        }
+    }
+    
+    /**
+     * Called when component is disabled
+     */
+    onDisable() {
+        // Update visual state when disabled
+        if (this.element) {
+            this.element.classList.add('disabled');
+        }
+    }
+    
+    /**
+     * Reset component state for reuse from pool
+     * @param {string} type - Type of tile
+     * @param {number} row - Grid row position
+     * @param {number} col - Grid column position
+     * @param {number} chaos - Initial chaos level
+     */
+    reset(type = 'normal', row, col, chaos = 0.5) {
+        this.type = type;
+        this.row = row;
+        this.col = col;
+        this.chaos = chaos;
+        this.order = 1 - chaos;
+        this.explored = false;
+        this.element = null;
+        
+        // Reset action costs
+        this.actionCosts = {
+            move: 1,
+            sense: 1,
+            interact: 1,
+            stabilize: 1
+        };
+        
+        // Reset special properties
+        this.energyValue = 0;
+        this.stabilizeEffect = 0;
+        this.interactEffect = 0;
+        this.isBlocked = false;
+        
+        // Re-initialize based on type
+        this.initializeByType();
+        
+        // Reset to enabled state
+        this.enabled = true;
+    }
+    
+    /**
+     * Clean up the component
+     * Called by entity.destroy() or entity.removeComponent()
+     */
+    destroy() {
+        // Clean up any non-DOM resources
+        // DOM elements are cleaned up in onDetach
+    }
+    
+    /**
      * Initialize tile properties based on its type
      */
     initializeByType() {

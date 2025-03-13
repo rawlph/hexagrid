@@ -60,13 +60,17 @@ export class Game {
         
         // Cache for level completion data for transitions between levels
         this.currentCompletionData = null;
+        
+        // Cached entity queries
+        this.playerQuery = null;
+        this.tileQuery = null;
     }
     
     /**
      * Initialize the game
      * @param {number} rows - Number of grid rows
      * @param {number} cols - Number of grid columns
-     * @param {string} gameStage - Game stage (early, mid, late) 
+     * @param {string} gameStage - Current game stage (early, mid, late)
      * @returns {boolean} - Whether initialization was successful
      */
     init(rows = this.config.defaultGridSize, cols = this.config.defaultGridSize, gameStage = 'early') {
@@ -80,6 +84,19 @@ export class Game {
             
             // Clear any existing entities
             this.entityManager.clear();
+            
+            // Set up component pools for frequently used components
+            // Pre-allocate tile components based on grid size plus some buffer
+            const tileCount = rows * cols;
+            const tileCellSize = 1; // For spatial hash
+            this.entityManager.getComponentPool(TileComponent, Math.ceil(tileCount * 0.1), tileCount);
+            
+            // Player component only needs a small pool 
+            this.entityManager.getComponentPool(PlayerComponent, 1, 5);
+            
+            // Create cached entity queries
+            this.playerQuery = this.entityManager.createQuery([], ['player']);
+            this.tileQuery = this.entityManager.createQuery([TileComponent]);
             
             // Create game objects
             this.grid = new Grid(rows, cols, gameStage);
@@ -354,49 +371,61 @@ export class Game {
     }
     
     /**
-     * Update the UI with current values
+     * Update the UI to reflect current game state
+     * @param {boolean} forceUpdate - Whether to force a full update
      */
-    updateUI() {
-        // Skip if UI manager isn't initialized
+    updateUI(forceUpdate = false) {
+        // Skip if UI manager isn't initialized yet
         if (!this.uiManager) return;
         
-        // Update UI with player stats
-        const playerEntity = this.entityManager.getEntitiesByTag('player')[0];
-        if (playerEntity) {
-            const playerComponent = playerEntity.getComponent(PlayerComponent);
-            if (playerComponent) {
-                // Update energy display with standardized property names
-                this.uiManager.updateResourceDisplay('energy', {
-                    energy: playerComponent.energy
-                });
-                
-                // Update movement points display with standardized property names
-                this.uiManager.updateResourceDisplay('movement', {
-                    movementPoints: playerComponent.movementPoints
-                });
-                
-                // Update evolution points display
-                this.uiManager.updateEvolutionPointsDisplay({
-                    chaosPoints: playerComponent.chaosEvolutionPoints,
-                    flowPoints: playerComponent.flowEvolutionPoints,
-                    orderPoints: playerComponent.orderEvolutionPoints,
-                    totalPoints: playerComponent.chaosEvolutionPoints + 
-                                playerComponent.flowEvolutionPoints + 
-                                playerComponent.orderEvolutionPoints
-                });
-            }
+        // Get player entity and component
+        const playerComponent = this.getPlayerComponent();
+        
+        if (!playerComponent) {
+            console.warn('Cannot update UI: No player component found');
+            return;
         }
         
-        // Update turn display
-        this.uiManager.updateTurnDisplay({
-            turnCount: this.turnSystem ? this.turnSystem.turnCount : 0
+        // Update energy display
+        this.uiManager.updateResourceDisplay('energy', {
+            energy: playerComponent.energy,
+            maxEnergy: playerComponent.maxEnergy
         });
         
-        // Update balance display with standardized property names
-        this.uiManager.updateBalanceDisplay({
-            chaos: this.grid ? this.grid.systemChaos : 0.5,
-            order: this.grid ? this.grid.systemOrder : 0.5
+        // Update movement points display
+        this.uiManager.updateResourceDisplay('movement', {
+            movementPoints: playerComponent.movementPoints,
+            maxMovementPoints: playerComponent.maxMovementPoints
         });
+        
+        // Update turn display
+        if (this.turnSystem) {
+            this.uiManager.updateResourceDisplay('turn', {
+                turnCount: this.turnSystem.turnCount
+            });
+        }
+        
+        // Update balance display
+        if (this.grid) {
+            const balance = this.grid.getSystemBalance();
+            this.uiManager.updateBalanceDisplay({
+                chaos: balance.chaos,
+                order: balance.order
+            });
+        }
+        
+        // Update evolution points display
+        this.uiManager.updateEvolutionPointsDisplay({
+            chaosPoints: playerComponent.chaosEvolutionPoints,
+            flowPoints: playerComponent.flowEvolutionPoints,
+            orderPoints: playerComponent.orderEvolutionPoints
+        });
+        
+        // Update action buttons based on current action
+        // The ActionPanel is responsible for this, not UIManager directly
+        if (window.actionPanel) {
+            window.actionPanel.updateButtonStates();
+        }
     }
     
     /**
@@ -556,42 +585,52 @@ export class Game {
     
     /**
      * Create the player entity
-     * @returns {Object|null} The created player entity or null if creation failed
+     * @param {number} startRow - Starting row position (defaults to center of grid)
+     * @param {number} startCol - Starting column position (defaults to center of grid)
+     * @returns {Entity} The created player entity
      */
-    createPlayer() {
-        try {
-            // Check if a player entity already exists and remove it
-            const existingPlayers = this.entityManager.getEntitiesByTag('player');
-            if (existingPlayers && existingPlayers.length > 0) {
-                console.warn(`Found ${existingPlayers.length} existing player entities, removing them...`);
-                for (const player of existingPlayers) {
-                    this.entityManager.removeEntity(player.id);
-                }
-            }
-            
-            // Use the imported Entity class directly, no need to check window.Entity
-            const playerEntity = new Entity();
-            
-            // Add player component - the entity is passed automatically to the component constructor
-            const playerComponent = playerEntity.addComponent(PlayerComponent, 0, 0);
-            if (!playerComponent) {
-                throw new Error('Failed to add PlayerComponent to player entity');
-            }
-            
-            // Add tag for easy querying
-            playerEntity.addTag('player');
-            
-            // Add to entity manager
-            this.entityManager.addEntity(playerEntity);
-            
-            // Initialize player
-            playerEntity.init();
-            
-            return playerEntity;
-        } catch (error) {
-            console.error('Failed to create player entity:', error);
-            return null;
+    createPlayer(startRow, startCol) {
+        // Set default starting position to 0,0 instead of center of grid
+        if (startRow === undefined || startCol === undefined) {
+            startRow = 0;
+            startCol = 0;
         }
+        
+        // Remove any existing player entities
+        const existingPlayers = this.playerQuery ? this.playerQuery.execute() : [];
+        if (existingPlayers && existingPlayers.length > 0) {
+            console.warn(`Found ${existingPlayers.length} existing player entities, removing them...`);
+            for (const player of existingPlayers) {
+                this.entityManager.removeEntity(player.id);
+            }
+        }
+        
+        // Create a new player entity
+        const playerEntity = new Entity();
+        
+        // Add player component using component pool if available
+        const playerComponent = playerEntity.addComponent(PlayerComponent, startRow, startCol);
+        if (!playerComponent) {
+            throw new Error('Failed to add PlayerComponent to player entity');
+        }
+        
+        // Add entity to entity manager
+        this.entityManager.addEntity(playerEntity);
+        
+        // Initialize the entity
+        playerEntity.init();
+        
+        // Place the player on the starting tile and mark it as explored
+        const startTile = this.getTileEntity(startRow, startCol);
+        if (startTile) {
+            const tileComponent = startTile.getComponent(TileComponent);
+            if (tileComponent) {
+                tileComponent.markExplored();
+                console.log(`Player placed on ${tileComponent.type} tile at (${startRow}, ${startCol}).`);
+            }
+        }
+        
+        return playerEntity;
     }
     
     /**
@@ -2641,5 +2680,48 @@ export class Game {
                 isStandardized: true
             }
         );
+    }
+    
+    /**
+     * Get the player entity
+     * @returns {Entity} Player entity or null
+     */
+    getPlayerEntity() {
+        // Use cached query for more efficient retrieval
+        const players = this.playerQuery ? this.playerQuery.execute() : [];
+        return players.length > 0 ? players[0] : null;
+    }
+    
+    /**
+     * Get a tile entity at a specific position
+     * @param {number} row - Row position
+     * @param {number} col - Column position
+     * @returns {Entity} Tile entity or null
+     */
+    getTileEntity(row, col) {
+        // For specific tile lookups, direct tag query is most efficient
+        const tag = `tile_${row}_${col}`;
+        const entities = this.entityManager.getEntitiesByTag(tag);
+        return entities.length > 0 ? entities[0] : null;
+    }
+    
+    /**
+     * Get a tile component at a specific position
+     * @param {number} row - Row position
+     * @param {number} col - Column position
+     * @returns {TileComponent} Tile component or null
+     */
+    getTileComponent(row, col) {
+        const tileEntity = this.getTileEntity(row, col);
+        return tileEntity ? tileEntity.getComponent(TileComponent) : null;
+    }
+    
+    /**
+     * Get the player component
+     * @returns {PlayerComponent} Player component or null
+     */
+    getPlayerComponent() {
+        const playerEntity = this.getPlayerEntity();
+        return playerEntity ? playerEntity.getComponent(PlayerComponent) : null;
     }
 } 
