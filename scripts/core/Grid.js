@@ -9,6 +9,115 @@ import { Entity, entityManager } from './EntityManager.js';
 import { TileComponent } from '../components/TileComponent.js';
 import { PlayerComponent } from '../components/PlayerComponent.js';
 
+/**
+ * Spatial hash for efficiently querying entities in a grid by position
+ */
+class SpatialHash {
+    /**
+     * Create a new spatial hash
+     * @param {number} cellSize - Size of each spatial cell in grid units (usually 1)
+     */
+    constructor(cellSize = 1) {
+        this.cellSize = cellSize;
+        this.cells = new Map();
+    }
+    
+    /**
+     * Get cell key for a position
+     * @param {number} row - Row position
+     * @param {number} col - Column position
+     * @returns {string} Cell key
+     */
+    getCellKey(row, col) {
+        const cellRow = Math.floor(row / this.cellSize);
+        const cellCol = Math.floor(col / this.cellSize);
+        return `${cellRow},${cellCol}`;
+    }
+    
+    /**
+     * Add an entity to the spatial hash
+     * @param {Entity} entity - Entity to add
+     * @param {number} row - Row position
+     * @param {number} col - Column position
+     */
+    add(entity, row, col) {
+        const key = this.getCellKey(row, col);
+        if (!this.cells.has(key)) {
+            this.cells.set(key, new Set());
+        }
+        this.cells.get(key).add(entity);
+    }
+    
+    /**
+     * Remove an entity from the spatial hash
+     * @param {Entity} entity - Entity to remove
+     * @param {number} row - Row position
+     * @param {number} col - Column position
+     */
+    remove(entity, row, col) {
+        const key = this.getCellKey(row, col);
+        if (this.cells.has(key)) {
+            const cell = this.cells.get(key);
+            cell.delete(entity);
+            if (cell.size === 0) {
+                this.cells.delete(key);
+            }
+        }
+    }
+    
+    /**
+     * Get entities in a specific cell
+     * @param {number} row - Row position
+     * @param {number} col - Column position
+     * @returns {Array} Array of entities in the cell
+     */
+    getEntitiesAt(row, col) {
+        const key = this.getCellKey(row, col);
+        const cell = this.cells.get(key);
+        return cell ? Array.from(cell) : [];
+    }
+    
+    /**
+     * Get entities in a radius around a position
+     * @param {number} row - Center row
+     * @param {number} col - Center column
+     * @param {number} radius - Search radius in grid units
+     * @returns {Array} Array of entities within radius
+     */
+    getEntitiesInRadius(row, col, radius) {
+        const result = new Set();
+        
+        // Calculate cell range to check
+        const cellRadius = Math.ceil(radius / this.cellSize);
+        const startCellRow = Math.floor((row - radius) / this.cellSize);
+        const endCellRow = Math.floor((row + radius) / this.cellSize);
+        const startCellCol = Math.floor((col - radius) / this.cellSize);
+        const endCellCol = Math.floor((col + radius) / this.cellSize);
+        
+        // Gather entities from all cells in range
+        for (let cellRow = startCellRow; cellRow <= endCellRow; cellRow++) {
+            for (let cellCol = startCellCol; cellCol <= endCellCol; cellCol++) {
+                const key = `${cellRow},${cellCol}`;
+                const cell = this.cells.get(key);
+                if (cell) {
+                    for (const entity of cell) {
+                        result.add(entity);
+                    }
+                }
+            }
+        }
+        
+        return Array.from(result);
+    }
+    
+    /**
+     * Clear all entities from the spatial hash
+     */
+    clear() {
+        this.cells.clear();
+    }
+}
+
 export class Grid {
     /**
      * Create a new grid
@@ -30,6 +139,9 @@ export class Grid {
         
         // Tile entities by position
         this.tiles = Array(rows).fill().map(() => Array(cols).fill(null));
+        
+        // Spatial hash for efficient position queries
+        this.spatialHash = new SpatialHash(1);
         
         // System balance
         this.systemChaos = 0.5;
@@ -355,6 +467,9 @@ export class Grid {
         // Add entity to entity manager - use the imported entityManager
         entityManager.addEntity(entity);
         
+        // Add to spatial hash for efficient position queries
+        this.spatialHash.add(entity, row, col);
+        
         // Store the entity in our tiles array for easy access
         this.tiles[row][col] = entity;
         
@@ -555,6 +670,9 @@ export class Grid {
         const particles = document.querySelectorAll('.floating-particle');
         particles.forEach(particle => particle.remove());
         
+        // Clear spatial hash
+        this.spatialHash.clear();
+        
         // Clear tiles array
         this.tiles = [];
     }
@@ -576,5 +694,18 @@ export class Grid {
         
         // Set container size
         this.setContainerSize();
+    }
+    
+    /**
+     * Get tiles within a certain radius of a position using spatial hash
+     * @param {number} row - Center row
+     * @param {number} col - Center column
+     * @param {number} radius - Search radius
+     * @returns {Array} Array of tile entities within radius
+     */
+    getTilesInRadius(row, col, radius) {
+        // Use the spatial hash for efficient radius queries
+        return this.spatialHash.getEntitiesInRadius(row, col, radius)
+            .filter(entity => entity.hasComponent(TileComponent));
     }
 } 

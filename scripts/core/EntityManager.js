@@ -42,10 +42,52 @@ export class Component {
     }
 
     /**
+     * Called after the component is attached to an entity
+     * This happens after constructor but before init
+     */
+    onAttach() {
+        // Override in derived classes
+    }
+
+    /**
+     * Called before the component is detached from an entity
+     * This happens before destroy when removing a component
+     */
+    onDetach() {
+        // Override in derived classes
+    }
+
+    /**
+     * Called when component is enabled
+     */
+    onEnable() {
+        // Override in derived classes
+    }
+
+    /**
+     * Called when component is disabled
+     */
+    onDisable() {
+        // Override in derived classes
+    }
+
+    /**
+     * Reset component state
+     * Called when a component is reused from a pool
+     * @param {...any} args - Arguments to reinitialize the component with
+     */
+    reset(...args) {
+        // Override in derived classes to reinitialize state
+    }
+
+    /**
      * Enable this component
      */
     enable() {
-        this.enabled = true;
+        if (!this.enabled) {
+            this.enabled = true;
+            this.onEnable();
+        }
         return this;
     }
 
@@ -53,7 +95,10 @@ export class Component {
      * Disable this component
      */
     disable() {
-        this.enabled = false;
+        if (this.enabled) {
+            this.enabled = false;
+            this.onDisable();
+        }
         return this;
     }
 }
@@ -89,9 +134,22 @@ export class Entity {
      */
     addComponent(ComponentClass, ...args) {
         try {
-            // First, create the component instance
-            const component = new ComponentClass(this, ...args);
             const componentName = ComponentClass.name;
+            
+            // Check if this entity already has this component type
+            if (this.components.has(componentName)) {
+                console.warn(`Entity ${this.id} already has component ${componentName}`);
+                return this.components.get(componentName);
+            }
+            
+            // Use component pool if available
+            let component;
+            if (entityManager && entityManager.componentPools.has(componentName)) {
+                component = entityManager.createComponent(this, ComponentClass, ...args);
+            } else {
+                // Create component directly if no pool exists
+                component = new ComponentClass(this, ...args);
+            }
             
             // Store component by its constructor name
             this.components.set(componentName, component);
@@ -99,6 +157,15 @@ export class Entity {
             // Notify entity manager
             if (entityManager) {
                 entityManager.registerComponent(this, componentName);
+            }
+            
+            // Call onAttach lifecycle method
+            if (component.onAttach && typeof component.onAttach === 'function') {
+                try {
+                    component.onAttach();
+                } catch (error) {
+                    console.error(`Error in onAttach for component ${componentName} on entity ${this.id}:`, error);
+                }
             }
             
             return component;
@@ -143,9 +210,22 @@ export class Entity {
         // Get component before removing
         const component = this.components.get(componentName);
         
+        // Call onDetach lifecycle method
+        if (component.onDetach && typeof component.onDetach === 'function') {
+            try {
+                component.onDetach();
+            } catch (error) {
+                console.error(`Error in onDetach for component ${componentName} on entity ${this.id}:`, error);
+            }
+        }
+        
         // Clean up component
         if (component.destroy && typeof component.destroy === 'function') {
-            component.destroy();
+            try {
+                component.destroy();
+            } catch (error) {
+                console.error(`Error destroying component ${componentName} on entity ${this.id}:`, error);
+            }
         }
         
         // Remove from entity
@@ -154,6 +234,9 @@ export class Entity {
         // Unregister from entity manager
         if (entityManager) {
             entityManager.unregisterComponent(this, componentName);
+            
+            // Return component to pool if available
+            entityManager.releaseComponent(component);
         }
         
         return true;
@@ -250,6 +333,15 @@ export class Entity {
     destroy() {
         // Clean up all components
         for (const component of this.components.values()) {
+            // Call onDetach to signal that component is being removed from entity
+            if (component.onDetach && typeof component.onDetach === 'function') {
+                try {
+                    component.onDetach();
+                } catch (error) {
+                    console.error(`Error in onDetach for component ${component.constructor.name} on entity ${this.id}:`, error);
+                }
+            }
+            
             if (component.destroy && typeof component.destroy === 'function') {
                 try {
                     component.destroy();
@@ -274,6 +366,187 @@ export class Entity {
 }
 
 /**
+ * Cached query for efficiently retrieving entities
+ */
+export class EntityQuery {
+    /**
+     * Create a new entity query
+     * @param {EntityManager} entityManager - The entity manager instance
+     * @param {Array<Class>} componentClasses - Component classes to filter by (AND logic)
+     * @param {Array<string>} tags - Tags to filter by (AND logic)
+     */
+    constructor(entityManager, componentClasses = [], tags = []) {
+        this.entityManager = entityManager;
+        this.componentClasses = componentClasses;
+        this.tags = tags;
+        this.results = [];
+        this.isDirty = true;
+        
+        // Register with entity manager for updates
+        this.entityManager.registerQuery(this);
+    }
+    
+    /**
+     * Get the query results, refreshing if needed
+     * @returns {Array<Entity>} Array of entities matching the query
+     */
+    execute() {
+        if (this.isDirty) {
+            this.refresh();
+        }
+        return this.results;
+    }
+    
+    /**
+     * Force refresh the query results
+     * @returns {Array<Entity>} Updated results
+     */
+    refresh() {
+        // Start with all entities or entities with specific tags
+        let entities;
+        
+        if (this.tags.length > 0) {
+            // Start with entities that have the first tag
+            entities = this.entityManager.getEntitiesByTag(this.tags[0]);
+            
+            // Filter by additional tags
+            for (let i = 1; i < this.tags.length; i++) {
+                entities = entities.filter(entity => entity.hasTag(this.tags[i]));
+            }
+        } else {
+            // No tags specified, use all entities
+            entities = this.entityManager.getAllEntities();
+        }
+        
+        // Filter by components
+        if (this.componentClasses.length > 0) {
+            entities = entities.filter(entity => {
+                return this.componentClasses.every(ComponentClass => {
+                    return entity.hasComponent(ComponentClass);
+                });
+            });
+        }
+        
+        this.results = entities;
+        this.isDirty = false;
+        return this.results;
+    }
+    
+    /**
+     * Mark the query as dirty, forcing a refresh on next execute
+     */
+    markDirty() {
+        this.isDirty = true;
+    }
+    
+    /**
+     * Dispose of the query and remove from entity manager
+     */
+    dispose() {
+        this.entityManager.unregisterQuery(this);
+        this.results = [];
+    }
+}
+
+/**
+ * Pool for reusing component instances
+ */
+export class ComponentPool {
+    /**
+     * Create a new component pool
+     * @param {Class} ComponentClass - Component class to pool
+     * @param {number} initialSize - Initial pool size (pre-allocation)
+     * @param {number} maxSize - Maximum pool size (-1 for unlimited)
+     */
+    constructor(ComponentClass, initialSize = 0, maxSize = 100) {
+        this.ComponentClass = ComponentClass;
+        this.pool = [];
+        this.maxSize = maxSize;
+        
+        // Pre-allocate components if requested
+        if (initialSize > 0) {
+            this.preallocate(initialSize);
+        }
+    }
+    
+    /**
+     * Pre-allocate components to the pool
+     * @param {number} count - Number of components to pre-allocate
+     */
+    preallocate(count) {
+        for (let i = 0; i < count; i++) {
+            const component = new this.ComponentClass(null);
+            this.pool.push(component);
+        }
+    }
+    
+    /**
+     * Get a component from the pool or create a new one
+     * @param {Entity} entity - Entity to attach the component to
+     * @param {...any} args - Arguments to pass to reset method
+     * @returns {Component} Component instance
+     */
+    get(entity, ...args) {
+        let component;
+        
+        // Get from pool or create new
+        if (this.pool.length > 0) {
+            component = this.pool.pop();
+            component.entity = entity;
+            
+            // Call reset method with args
+            if (component.reset && typeof component.reset === 'function') {
+                component.reset(...args);
+            }
+        } else {
+            component = new this.ComponentClass(entity, ...args);
+        }
+        
+        return component;
+    }
+    
+    /**
+     * Release a component back to the pool
+     * @param {Component} component - Component to release
+     * @returns {boolean} Whether the component was added to the pool
+     */
+    release(component) {
+        // Validate component type
+        if (!(component instanceof this.ComponentClass)) {
+            console.warn(`ComponentPool: Cannot release component of type ${component.constructor.name} to pool for ${this.ComponentClass.name}`);
+            return false;
+        }
+        
+        // Skip if pool is at max size
+        if (this.maxSize !== -1 && this.pool.length >= this.maxSize) {
+            return false;
+        }
+        
+        // Prepare component for pooling
+        component.entity = null;
+        
+        // Add to pool
+        this.pool.push(component);
+        return true;
+    }
+    
+    /**
+     * Get the number of components in the pool
+     * @returns {number} Pool size
+     */
+    size() {
+        return this.pool.length;
+    }
+    
+    /**
+     * Clear the pool
+     */
+    clear() {
+        this.pool = [];
+    }
+}
+
+/**
  * Entity Manager singleton to track all entities
  */
 class EntityManager {
@@ -291,9 +564,62 @@ class EntityManager {
         this.entities = new Map();
         this.taggedEntities = new Map();
         this.componentEntities = new Map();
+        this.queries = new Set();
+        this.componentPools = new Map();
         
         // Flag for initialization
         this.isInitialized = true;
+    }
+    
+    /**
+     * Get or create a component pool
+     * @param {Class} ComponentClass - Component class to pool
+     * @param {number} initialSize - Initial pool size
+     * @param {number} maxSize - Maximum pool size
+     * @returns {ComponentPool} Component pool instance
+     */
+    getComponentPool(ComponentClass, initialSize = 0, maxSize = 100) {
+        const componentName = ComponentClass.name;
+        
+        if (!this.componentPools.has(componentName)) {
+            const pool = new ComponentPool(ComponentClass, initialSize, maxSize);
+            this.componentPools.set(componentName, pool);
+            return pool;
+        }
+        
+        return this.componentPools.get(componentName);
+    }
+    
+    /**
+     * Create a component from a pool
+     * @param {Entity} entity - Entity to attach component to
+     * @param {Class} ComponentClass - Component class to create
+     * @param {...any} args - Arguments to pass to component
+     * @returns {Component} Created component
+     */
+    createComponent(entity, ComponentClass, ...args) {
+        const pool = this.getComponentPool(ComponentClass);
+        return pool.get(entity, ...args);
+    }
+    
+    /**
+     * Release a component back to its pool
+     * @param {Component} component - Component to release
+     * @returns {boolean} Whether component was released
+     */
+    releaseComponent(component) {
+        if (!component || !component.constructor) {
+            return false;
+        }
+        
+        const componentName = component.constructor.name;
+        
+        if (!this.componentPools.has(componentName)) {
+            return false;
+        }
+        
+        const pool = this.componentPools.get(componentName);
+        return pool.release(component);
     }
     
     /**
@@ -308,6 +634,7 @@ class EntityManager {
         }
         
         this.entities.set(entity.id, entity);
+        this.markQueriesDirty();
         return this;
     }
     
@@ -348,6 +675,41 @@ class EntityManager {
     }
     
     /**
+     * Create a new cached query
+     * @param {Array<Class>} componentClasses - Component classes to filter by
+     * @param {Array<string>} tags - Tags to filter by
+     * @returns {EntityQuery} New query instance
+     */
+    createQuery(componentClasses = [], tags = []) {
+        return new EntityQuery(this, componentClasses, tags);
+    }
+    
+    /**
+     * Register a query for updates
+     * @param {EntityQuery} query - Query to register
+     */
+    registerQuery(query) {
+        this.queries.add(query);
+    }
+    
+    /**
+     * Unregister a query
+     * @param {EntityQuery} query - Query to unregister
+     */
+    unregisterQuery(query) {
+        this.queries.delete(query);
+    }
+    
+    /**
+     * Mark all queries as dirty
+     */
+    markQueriesDirty() {
+        for (const query of this.queries) {
+            query.markDirty();
+        }
+    }
+    
+    /**
      * Register an entity's tag
      * @param {Entity} entity - Entity with tag
      * @param {string} tag - Tag to register
@@ -361,6 +723,7 @@ class EntityManager {
         
         const entities = this.taggedEntities.get(tag);
         entities.add(entity);
+        this.markQueriesDirty();
     }
     
     /**
@@ -382,6 +745,8 @@ class EntityManager {
         if (entities.size === 0) {
             this.taggedEntities.delete(tag);
         }
+        
+        this.markQueriesDirty();
     }
     
     /**
@@ -398,6 +763,7 @@ class EntityManager {
         
         const entities = this.componentEntities.get(componentName);
         entities.add(entity);
+        this.markQueriesDirty();
     }
     
     /**
@@ -419,6 +785,8 @@ class EntityManager {
         if (entities.size === 0) {
             this.componentEntities.delete(componentName);
         }
+        
+        this.markQueriesDirty();
     }
     
     /**
@@ -446,6 +814,7 @@ class EntityManager {
         // Remove from entities map
         this.entities.delete(entityId);
         
+        this.markQueriesDirty();
         return true;
     }
     
@@ -487,6 +856,17 @@ class EntityManager {
         this.entities.clear();
         this.taggedEntities.clear();
         this.componentEntities.clear();
+        
+        // Clear all queries
+        for (const query of this.queries) {
+            query.dispose();
+        }
+        this.queries.clear();
+        
+        // Clear component pools
+        for (const pool of this.componentPools.values()) {
+            pool.clear();
+        }
     }
     
     /**
