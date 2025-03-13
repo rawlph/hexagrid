@@ -96,10 +96,9 @@ export class Entity {
             // Store component by its constructor name
             this.components.set(componentName, component);
             
-            // Notify entity manager if available
-            const em = getEntityManagerInstance();
-            if (em) {
-                em.registerComponent(this, componentName);
+            // Notify entity manager
+            if (entityManager) {
+                entityManager.registerComponent(this, componentName);
             }
             
             return component;
@@ -153,9 +152,8 @@ export class Entity {
         this.components.delete(componentName);
         
         // Unregister from entity manager
-        const em = getEntityManagerInstance();
-        if (em) {
-            em.unregisterComponent(this, componentName);
+        if (entityManager) {
+            entityManager.unregisterComponent(this, componentName);
         }
         
         return true;
@@ -174,9 +172,8 @@ export class Entity {
         this.tags.add(tag);
         
         // Register with entity manager
-        const em = getEntityManagerInstance();
-        if (em) {
-            em.registerTag(this, tag);
+        if (entityManager) {
+            entityManager.registerTag(this, tag);
         }
         
         return this;
@@ -204,9 +201,8 @@ export class Entity {
         this.tags.delete(tag);
         
         // Unregister from entity manager
-        const em = getEntityManagerInstance();
-        if (em) {
-            em.unregisterTag(this, tag);
+        if (entityManager) {
+            entityManager.unregisterTag(this, tag);
         }
         
         return this;
@@ -268,9 +264,8 @@ export class Entity {
         this.tags.clear();
         
         // Remove from entity manager
-        const em = getEntityManagerInstance();
-        if (em) {
-            em.removeEntity(this.id);
+        if (entityManager) {
+            entityManager.removeEntity(this.id);
         }
         
         // Mark as inactive
@@ -506,24 +501,5 @@ class EntityManager {
 // Initialize the static instance property
 EntityManager.instance = null;
 
-/**
- * Get the entity manager singleton instance
- * @returns {EntityManager} The entity manager instance
- */
-function getEntityManagerInstance() {
-    // Check global window first (for backward compatibility)
-    if (typeof window !== 'undefined' && window.entityManager) {
-        return window.entityManager;
-    }
-    
-    // Otherwise use the singleton instance
-    return EntityManager.getInstance();
-}
-
 // Create and export singleton instance
-export const entityManager = EntityManager.getInstance();
-
-// For backward compatibility, set on window if in browser context
-if (typeof window !== 'undefined') {
-    window.entityManager = entityManager;
-} 
+export const entityManager = EntityManager.getInstance(); 

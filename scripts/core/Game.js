@@ -9,9 +9,8 @@ import { TileComponent } from '../components/TileComponent.js';
 import { PlayerComponent } from '../components/PlayerComponent.js';
 import { Grid } from './Grid.js';
 import { TurnSystem } from './TurnSystem.js';
-import { entityManager } from './EntityManager.js';
+import { entityManager, Entity } from './EntityManager.js';
 import { eventSystem } from './EventSystem.js';
-import { Entity } from './Entity.js';
 import { EventTypes } from './EventTypes.js';
 
 export class Game {
@@ -23,16 +22,16 @@ export class Game {
      */
     constructor(dependencies = {}) {
         // Store dependencies
-        this.entityManager = dependencies.entityManager || (window.entityManager || null);
-        this.eventSystem = dependencies.eventSystem || (window.eventSystem || null);
+        this.entityManager = dependencies.entityManager || entityManager;
+        this.eventSystem = dependencies.eventSystem || eventSystem;
         
         // Validate critical dependencies
         if (!this.entityManager) {
-            console.error('EntityManager not provided to Game constructor and not found globally');
+            console.error('EntityManager not provided to Game constructor');
         }
         
         if (!this.eventSystem) {
-            console.error('EventSystem not provided to Game constructor and not found globally');
+            console.error('EventSystem not provided to Game constructor');
         }
         
         // Game configuration

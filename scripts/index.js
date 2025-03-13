@@ -22,8 +22,7 @@ import { eventSystemMigration } from './tools/event-system-migration.js';
 
 // Make core systems globally available
 window.eventSystem = eventSystem;
-window.entityManager = entityManager;
-window.Entity = Entity;
+// No longer making Entity, Component, or entityManager globally available
 window.Grid = Grid;
 window.TurnSystem = TurnSystem;
 window.EventTypes = EventTypes;
@@ -87,7 +86,8 @@ function handleInitializationError(error) {
 }
 
 /**
- * Initialize the game with proper validation and error handling
+ * Initialize the game
+ * Sets up all systems and starts the game loop
  */
 function initializeGame() {
     console.log('Starting game initialization');
@@ -100,14 +100,14 @@ function initializeGame() {
     
     try {
         // Validate required dependencies
-        if (!window.eventSystem || !window.entityManager) {
-            throw new Error('Core systems (eventSystem, entityManager) not available');
+        if (!eventSystem) {
+            throw new Error('Core system (eventSystem) not available');
         }
         
         // Create global game instance with explicit dependencies
         window.game = new Game({
-            entityManager: window.entityManager,
-            eventSystem: window.eventSystem
+            entityManager: entityManager,
+            eventSystem: eventSystem
         });
         
         // Initialize with default settings
@@ -119,6 +119,7 @@ function initializeGame() {
             throw new Error('Game initialization returned false');
         }
     } catch (error) {
+        // Handle initialization error
         handleInitializationError(error);
     }
 }

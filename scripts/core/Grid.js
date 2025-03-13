@@ -5,6 +5,9 @@
 import { RandomUtils } from '../utils/RandomUtils.js';
 import { eventSystem } from './EventSystem.js';
 import { EventTypes } from './EventTypes.js';
+import { Entity, entityManager } from './EntityManager.js';
+import { TileComponent } from '../components/TileComponent.js';
+import { PlayerComponent } from '../components/PlayerComponent.js';
 
 export class Grid {
     /**
