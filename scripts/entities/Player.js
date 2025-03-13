@@ -288,6 +288,8 @@ class PlayerComponent extends Component {
         // Emit energy changed event
         eventSystem.emit('playerEnergyChanged', {
             player: this,
+            energy: this.energy,
+            // Legacy properties for backward compatibility
             currentEnergy: this.energy,
             maxEnergy: this.maxEnergy,
             energyUsed: amount
@@ -434,6 +436,8 @@ class PlayerComponent extends Component {
         
         eventSystem.emit('playerEnergyChanged', {
             player: this,
+            energy: this.energy,
+            // Legacy properties for backward compatibility
             currentEnergy: this.energy,
             maxEnergy: this.maxEnergy,
             energyRestored: energyRestore

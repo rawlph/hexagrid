@@ -98,24 +98,24 @@ export class Grid {
     setGameStageBalance(gameStage) {
         switch (gameStage) {
             case 'early':
-                this.systemChaos = 0.6;
-                this.systemOrder = 0.4;
-                break;
-                
-            case 'mid':
-                this.systemChaos = 0.7;
-                this.systemOrder = 0.3;
-                break;
-                
-            case 'late':
                 this.systemChaos = 0.8;
                 this.systemOrder = 0.2;
                 break;
                 
+            case 'mid':
+                this.systemChaos = 0.5;
+                this.systemOrder = 0.5;
+                break;
+                
+            case 'late':
+                this.systemChaos = 0.3;
+                this.systemOrder = 0.7;
+                break;
+                
             default:
-                // Default to 60/40 split
-                this.systemChaos = 0.6;
-                this.systemOrder = 0.4;
+                // Default to 80/20 split for early game if unspecified
+                this.systemChaos = 0.8;
+                this.systemOrder = 0.2;
         }
         
         console.log(`Grid: Set initial balance for ${gameStage} stage - Chaos: ${this.systemChaos.toFixed(2)}, Order: ${this.systemOrder.toFixed(2)}`);
@@ -308,15 +308,17 @@ export class Grid {
         // Select a tile type based on probabilities using RandomUtils
         const tileType = RandomUtils.getWeightedRandomTileType(tileProbabilities);
         
-        // Create a random chaos value for this tile (0-1)
-        // Higher chaos values for tiles farther from center
-        const centerRow = Math.floor(this.rows / 2);
-        const centerCol = Math.floor(this.cols / 2);
-        const distToCenter = utils.hexDistance(row, col, centerRow, centerCol);
-        const maxDist = utils.hexDistance(0, 0, this.rows - 1, this.cols - 1);
+        // Create a chaos value for this tile based on game stage and position
+        // Use the RandomUtils method for consistent generation
+        let chaos = RandomUtils.generateChaosByGameStage(
+            this.gameStage, 
+            row, 
+            col, 
+            this.rows, 
+            this.cols
+        );
         
-        // Base chaos on distance to center and some randomness
-        let chaos = (distToCenter / maxDist) * 0.5 + Math.random() * 0.5;
+        // Ensure chaos is within valid range
         chaos = utils.clamp(chaos, 0.1, 0.9);
         
         // Create the entity

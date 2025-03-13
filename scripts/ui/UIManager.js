@@ -470,9 +470,10 @@ export class UIManager {
         console.log("Energy display update:", data);
         
         if (this.energyDisplay) {
-            // Check for different property names for compatibility
-            const energyValue = data.newEnergy !== undefined ? data.newEnergy : 
-                               (data.currentEnergy !== undefined ? data.currentEnergy : null);
+            // First check for standardized property name, then fall back to legacy names
+            const energyValue = data.energy !== undefined ? data.energy : 
+                              (data.newEnergy !== undefined ? data.newEnergy : 
+                              (data.currentEnergy !== undefined ? data.currentEnergy : null));
             
             if (energyValue !== null) {
                 this.energyDisplay.textContent = energyValue;

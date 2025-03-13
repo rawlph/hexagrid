@@ -81,7 +81,7 @@ export class Game {
             this.entityManager.clear();
             
             // Create game objects
-            this.grid = new Grid(rows, cols);
+            this.grid = new Grid(rows, cols, gameStage);
             this.turnSystem = new TurnSystem(gameStage, { grid: this.grid });
             this.evolutionSystem = new EvolutionSystem(); // Initialize evolution system
             this.evolutionSystem.init(); // Make sure to call init
@@ -108,6 +108,16 @@ export class Game {
                 turnSystem: this.turnSystem
             });
             this.uiManager.init();
+            
+            // Make sure our UI shows the correct balance values
+            const balance = this.grid.getSystemBalance();
+            eventSystem.emit('systemBalanceChanged', {
+                chaos: balance.chaos,
+                order: balance.order,
+                systemChaos: balance.chaos,
+                systemOrder: balance.order,
+                chaosDelta: 0
+            });
             
             // Add feedback wrapper element if it doesn't exist yet
             if (!document.getElementById('feedback-message')) {
@@ -337,6 +347,8 @@ export class Game {
             if (playerComponent) {
                 // Update energy display via UIManager
                 this.uiManager.updateEnergyDisplay({
+                    energy: playerComponent.energy,
+                    // Legacy property for backward compatibility
                     currentEnergy: playerComponent.energy,
                     maxEnergy: playerComponent.maxEnergy
                 });
@@ -2196,11 +2208,14 @@ export class Game {
     }
     
     /**
-     * Start the next level
-     * @param {Object} data - Completion data
+     * Start the next level with proper progression
+     * @param {Object} data - Completion data from previous level
      */
     startNextLevel(data) {
-        console.log('Starting next level');
+        console.log('Starting next level with data:', data);
+        
+        // Track current level number or initialize to 1
+        let nextLevelNumber = (this.currentLevelNumber || 1) + 1;
         
         // Save player traits before clearing entities
         const playerData = this.savePlayerTraits();
@@ -2218,8 +2233,13 @@ export class Game {
             evolveBtn.classList.add('hidden');
         }
         
-        // Calculate new balance based on player's style
-        let newBalance = this.calculateNextLevelBalance(data);
+        // Calculate new balance for next level, passing level number
+        const newBalance = this.calculateNextLevelBalance({
+            ...data,
+            levelNumber: nextLevelNumber
+        });
+        
+        console.log(`Starting level ${nextLevelNumber} with balance: Chaos ${newBalance.chaos.toFixed(2)}, Order ${newBalance.order.toFixed(2)}`);
         
         // Determine grid size based on game stage
         let gridSize = this.config.defaultGridSize;
@@ -2244,6 +2264,23 @@ export class Game {
         
         // Restart the game with new settings
         this.init(gridSize, gridSize, data.gameStage);
+        
+        // Update the current level number
+        this.currentLevelNumber = nextLevelNumber;
+        
+        // Set the new balance on the grid
+        if (this.grid) {
+            this.grid.systemChaos = newBalance.chaos;
+            this.grid.systemOrder = newBalance.order;
+            // Emit the balance change event
+            eventSystem.emit('systemBalanceChanged', {
+                chaos: newBalance.chaos,
+                order: newBalance.order,
+                systemChaos: newBalance.chaos,
+                systemOrder: newBalance.order,
+                chaosDelta: 0
+            });
+        }
         
         // Restore metrics data if needed
         if (metricsData && this.metricsSystem) {
@@ -2388,29 +2425,54 @@ export class Game {
      * @returns {Object} New balance parameters
      */
     calculateNextLevelBalance(data) {
+        // Get current game stage
+        const currentStage = this.turnSystem?.gameStage || 'early';
+        
         // Calculate point ratios
         const total = data.totalPoints || 1; // Avoid division by zero
         const chaosRatio = data.chaosPoints / total;
         const orderRatio = data.orderPoints / total;
         
-        // Determine if player tends toward chaos or order
-        if (chaosRatio > 0.6) {
-            // Player favors chaos - make world slightly more ordered
-            return {
-                chaos: 0.45,
-                order: 0.55
-            };
-        } else if (orderRatio > 0.6) {
-            // Player favors order - make world slightly more chaotic
-            return {
-                chaos: 0.55,
-                order: 0.45
-            };
-        } else {
-            // Player is balanced - keep world near balanced
+        // Set progression based on game stage
+        if (currentStage === 'early') {
+            // Early game: Start with high chaos, gradually reduce toward balance
+            // High chaos values (0.8 - 0.6) for primordial state
+            if (data.levelNumber === undefined || data.levelNumber < 2) {
+                // First level - high chaos (80/20)
+                return {
+                    chaos: 0.8,
+                    order: 0.2
+                };
+            } else if (data.levelNumber < 4) {
+                // Levels 2-3: Slightly less chaos (70/30)
+                return {
+                    chaos: 0.7,
+                    order: 0.3
+                };
+            } else {
+                // Levels 4+: Approaching balance (60/40)
+                return {
+                    chaos: 0.6, 
+                    order: 0.4
+                };
+            }
+        } else if (currentStage === 'mid') {
+            // Mid game: Balance (50/50)
             return {
                 chaos: 0.5,
                 order: 0.5
+            };
+        } else if (currentStage === 'late') {
+            // Late game: More order than chaos (30/70)
+            return {
+                chaos: 0.3,
+                order: 0.7
+            };
+        } else {
+            // Default case - use early game profile
+            return {
+                chaos: 0.8,
+                order: 0.2
             };
         }
     }

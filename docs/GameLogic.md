@@ -417,7 +417,12 @@ The event system is central to communication between components:
 
 ### Player Events
 - **playerMoved**: Player changes position
-- **playerEnergyChanged**: Player energy changes
+- **playerEnergyChanged**: Player energy changes. Event data includes:
+  - `energy`: Current energy level (standard property)
+  - `oldEnergy`: Previous energy level
+  - `delta`: Change in energy
+  - `maxEnergy`: Maximum energy capacity (if available)
+  - `energyUsed`/`energyRestored`: Amount used or gained (for metrics)
 - **playerMovementPointsChanged**: Player movement points change
 - **playerEvolutionPointsChanged**: Player evolution points change
 - **playerActionChanged**: Player selects a different action

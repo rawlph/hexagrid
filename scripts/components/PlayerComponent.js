@@ -291,12 +291,13 @@ export class PlayerComponent {
         // Deduct energy
         this.energy = Math.max(0, this.energy - amount);
         
-        // Emit energy changed event with multiple property names for compatibility
+        // Emit energy changed event with standardized property name
         eventSystem.emit('playerEnergyChanged', {
             player: this,
             oldEnergy: oldEnergy,
+            energy: this.energy,
+            // Include legacy properties for backward compatibility (temporary)
             newEnergy: this.energy,
-            currentEnergy: this.energy,  // For backward compatibility
             delta: this.energy - oldEnergy
         });
         
@@ -497,8 +498,12 @@ export class PlayerComponent {
             eventSystem.emit('playerEnergyChanged', {
                 player: this,
                 oldEnergy: oldEnergy,
+                energy: this.energy,
+                // Include legacy properties for backward compatibility (temporary)
                 newEnergy: this.energy,
-                delta: this.energy - oldEnergy
+                delta: this.energy - oldEnergy,
+                // Include specific property for metrics tracking
+                energyRestored: finalRecovery
             });
         }
         
