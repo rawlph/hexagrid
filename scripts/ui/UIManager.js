@@ -42,6 +42,9 @@ export class UIManager {
         
         // Event listeners
         this._registeredEvents = [];
+        
+        // Debug mode
+        this.debugMode = false;
     }
     
     /**
@@ -132,38 +135,148 @@ export class UIManager {
      * Register game event listeners
      */
     registerEventListeners() {
+        // Use standardized event names for all listeners
+        // Only register for legacy events that don't have standardized equivalents
+        
         // Player resource changes
         this._registeredEvents.push(
-            eventSystem.on('playerEnergyChanged', this.updateEnergyDisplay.bind(this))
+            eventSystem.on(EventTypes.PLAYER_ENERGY_CHANGED.standard, 
+                data => this.updateResourceDisplay('energy', data))
         );
         
         this._registeredEvents.push(
-            eventSystem.on('playerMovementPointsChanged', this.updateMovementPointsDisplay.bind(this))
+            eventSystem.on(EventTypes.PLAYER_MOVEMENT_POINTS_CHANGED.standard, 
+                data => this.updateResourceDisplay('movement', data))
         );
         
-        // Turn changes
+        // For backward compatibility, listen to legacy events only if they don't have standardized equivalents
+        // This is a transitional approach until all emitters are updated
         this._registeredEvents.push(
-            eventSystem.on('turnStart', this.updateTurnDisplay.bind(this))
+            eventSystem.on(EventTypes.PLAYER_ENERGY_CHANGED.legacy, 
+                data => this.updateResourceDisplay('energy', data))
+        );
+        
+        this._registeredEvents.push(
+            eventSystem.on(EventTypes.PLAYER_MOVEMENT_POINTS_CHANGED.legacy, 
+                data => this.updateResourceDisplay('movement', data))
+        );
+        
+        // Turn changes - using legacy event until migrated
+        this._registeredEvents.push(
+            eventSystem.on(EventTypes.TURN_START.standard, this.updateTurnDisplay.bind(this))
         );
         
         // System balance changes
         this._registeredEvents.push(
-            eventSystem.on('systemBalanceChanged', this.updateBalanceDisplay.bind(this))
+            eventSystem.on(EventTypes.SYSTEM_BALANCE_CHANGED.standard, this.updateBalanceDisplay.bind(this))
         );
         
         // Evolution points changes
         this._registeredEvents.push(
-            eventSystem.on('playerEvolutionPointsChanged', this.updateEvolutionPointsDisplay.bind(this))
+            eventSystem.on(EventTypes.PLAYER_EVOLUTION_POINTS_CHANGED.legacy, this.updateEvolutionPointsDisplay.bind(this))
         );
         
         // Game state changes
         this._registeredEvents.push(
-            eventSystem.on('gameVictory', this.showVictoryScreen.bind(this))
+            eventSystem.on(EventTypes.GAME_VICTORY.standard, this.showVictoryScreen.bind(this))
         );
         
         this._registeredEvents.push(
-            eventSystem.on('gameOver', this.showGameOverScreen.bind(this))
+            eventSystem.on(EventTypes.GAME_OVER.standard, this.showGameOverScreen.bind(this))
         );
+    }
+    
+    /**
+     * Get the correct display element for a resource type
+     * @param {string} resourceType - Type of resource (energy, movement, etc.)
+     * @returns {HTMLElement} The display element for that resource
+     */
+    getResourceDisplayElement(resourceType) {
+        switch(resourceType) {
+            case 'energy':
+                return this.energyDisplay;
+            case 'movement':
+                return this.movementDisplay;
+            case 'turn':
+                return this.turnDisplay;
+            case 'balanceChaos':
+                return this.balanceChaosDisplay;
+            case 'balanceOrder':
+                return this.balanceOrderDisplay;
+            case 'evolutionChaos':
+                return this.evolutionChaosDisplay;
+            case 'evolutionFlow':
+                return this.evolutionFlowDisplay;
+            case 'evolutionOrder':
+                return this.evolutionOrderDisplay;
+            default:
+                console.warn(`Unknown resource type: ${resourceType}`);
+                return null;
+        }
+    }
+    
+    /**
+     * Extract the appropriate value from event data based on resource type
+     * @param {string} resourceType - Type of resource
+     * @param {object} data - Event data
+     * @returns {*} The resource value
+     */
+    getResourceValue(resourceType, data) {
+        if (!data) return 0;
+        
+        switch(resourceType) {
+            case 'energy':
+                return data.energy !== undefined ? data.energy : 
+                      (data.newEnergy !== undefined ? data.newEnergy : 
+                      (data.currentEnergy !== undefined ? data.currentEnergy : 0));
+            case 'movement':
+                return data.movementPoints !== undefined ? data.movementPoints : 
+                      (data.newPoints !== undefined ? data.newPoints : 
+                      (data.newMovementPoints !== undefined ? data.newMovementPoints : 0));
+            case 'turn':
+                return data.turnCount !== undefined ? data.turnCount : 0;
+            default:
+                console.warn(`No value extractor defined for resource type: ${resourceType}`);
+                return 0;
+        }
+    }
+    
+    /**
+     * Update a resource display with the correct value
+     * @param {string} resourceType - Type of resource to update
+     * @param {object} data - Event data containing the resource value
+     */
+    updateResourceDisplay(resourceType, data) {
+        const displayElement = this.getResourceDisplayElement(resourceType);
+        if (!displayElement) {
+            console.warn(`Display element not found for resource type: ${resourceType}`);
+            return;
+        }
+        
+        const value = this.getResourceValue(resourceType, data);
+        displayElement.textContent = value;
+        
+        if (this.debugMode) {
+            console.log(`Updated ${resourceType} display to ${value}`, data);
+        }
+    }
+    
+    /**
+     * Update the energy display
+     * @param {object} data - Energy change data
+     * @deprecated Use updateResourceDisplay('energy', data) instead
+     */
+    updateEnergyDisplay(data) {
+        this.updateResourceDisplay('energy', data);
+    }
+    
+    /**
+     * Update the movement points display
+     * @param {object} data - Movement points data
+     * @deprecated Use updateResourceDisplay('movement', data) instead
+     */
+    updateMovementPointsDisplay(data) {
+        this.updateResourceDisplay('movement', data);
     }
     
     /**
@@ -475,29 +588,6 @@ export class UIManager {
     }
     
     /**
-     * Update the energy display
-     * @param {object} data - Energy change data
-     */
-    updateEnergyDisplay(data) {
-        console.log("Energy display update:", data);
-        
-        if (this.energyDisplay) {
-            // First check for standardized property name, then fall back to legacy names
-            const energyValue = data.energy !== undefined ? data.energy : 
-                              (data.newEnergy !== undefined ? data.newEnergy : 
-                              (data.currentEnergy !== undefined ? data.currentEnergy : null));
-            
-            if (energyValue !== null) {
-                this.energyDisplay.textContent = energyValue;
-            } else {
-                console.warn("Energy update received without energy value");
-            }
-        } else {
-            console.warn("Energy display element not found");
-        }
-    }
-    
-    /**
      * Update the turn display
      * @param {object} data - Turn data
      */
@@ -564,16 +654,6 @@ export class UIManager {
                 // Severe imbalance - white
                 balanceMarker.style.backgroundColor = 'rgba(255, 255, 255, 0.9)';
             }
-        }
-    }
-    
-    /**
-     * Update the movement points display
-     * @param {object} data - Movement points data
-     */
-    updateMovementPointsDisplay(data) {
-        if (this.movementDisplay) {
-            this.movementDisplay.textContent = data.newPoints;
         }
     }
     

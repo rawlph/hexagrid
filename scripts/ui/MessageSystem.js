@@ -1,6 +1,8 @@
 /**
  * Manages in-game messages and notifications
  */
+import { EventTypes } from '../core/EventTypes.js';
+
 class MessageSystem {
     constructor() {
         // DOM elements
@@ -70,11 +72,11 @@ class MessageSystem {
      * Register event listeners
      */
     registerEventListeners() {
-        // Player action events - using only standardized event names to avoid duplicates
+        // Player action events - using standardized event names with EventTypes constants
         
         // Move actions
         this._registeredEvents.push(
-            eventSystem.on('action:complete:move', data => {
+            eventSystem.on(EventTypes.ACTION_COMPLETE_MOVE.standard, data => {
                 // For move actions, we don't need to log here as the ActionPanel already handles it
                 // with more details like energy cost
             })
@@ -82,7 +84,7 @@ class MessageSystem {
         
         // Sense actions
         this._registeredEvents.push(
-            eventSystem.on('action:complete:sense', data => {
+            eventSystem.on(EventTypes.ACTION_COMPLETE_SENSE.standard, data => {
                 // For sense actions, we don't log here as ActionPanel provides more detailed feedback
                 // that includes tile type and chaos levels
             })
@@ -90,7 +92,7 @@ class MessageSystem {
         
         // Interact actions
         this._registeredEvents.push(
-            eventSystem.on('action:complete:interact', data => {
+            eventSystem.on(EventTypes.ACTION_COMPLETE_INTERACT.standard, data => {
                 // For interact actions, we don't log here as ActionPanel provides more detailed feedback
                 // about the specific interaction effect
             })
@@ -98,21 +100,21 @@ class MessageSystem {
         
         // Stabilize actions
         this._registeredEvents.push(
-            eventSystem.on('action:complete:stabilize', data => {
+            eventSystem.on(EventTypes.ACTION_COMPLETE_STABILIZE.standard, data => {
                 // For stabilize actions, we don't log here as ActionPanel provides more detailed feedback
                 // that includes the reduction percentage
             })
         );
         
-        // Tile events - keep these as they're not duplicated elsewhere
+        // Tile events - updated to use standardized event names
         this._registeredEvents.push(
-            eventSystem.on('tileExplored', data => {
+            eventSystem.on(EventTypes.TILE_EXPLORED.standard, data => {
                 this.addLogMessage(`Explored ${data.type} tile at (${data.row}, ${data.col})`, "event");
             })
         );
         
         this._registeredEvents.push(
-            eventSystem.on('tileChaosChanged', data => {
+            eventSystem.on(EventTypes.TILE_CHAOS_CHANGED.standard, data => {
                 const changeType = data.chaosDelta > 0 ? "increased" : "decreased";
                 const changeAmt = Math.abs(Math.round(data.chaosDelta * 100));
                 if (changeAmt > 5) { // Only log significant changes
@@ -121,34 +123,34 @@ class MessageSystem {
             })
         );
         
-        // Game state events - keep these as they're not duplicated elsewhere
+        // Game state events - updated to use standardized event names
         this._registeredEvents.push(
-            eventSystem.on('turnStart', data => {
+            eventSystem.on(EventTypes.TURN_START.standard, data => {
                 this.addLogMessage(`Turn ${data.turnCount} started`, "system");
             })
         );
         
         this._registeredEvents.push(
-            eventSystem.on('turnEnd', data => {
+            eventSystem.on(EventTypes.TURN_END.standard, data => {
                 this.addLogMessage(`Turn ${data.turnCount} ended`, "system");
             })
         );
         
         this._registeredEvents.push(
-            eventSystem.on('gameVictory', data => {
+            eventSystem.on(EventTypes.GAME_VICTORY.standard, data => {
                 this.addLogMessage(`Victory achieved! Order level: ${Math.round(data.systemOrder * 100)}%`, "system");
             })
         );
         
         this._registeredEvents.push(
-            eventSystem.on('gameOver', data => {
+            eventSystem.on(EventTypes.GAME_OVER.standard, data => {
                 this.addLogMessage(`Game over: ${data.reason}`, "system");
             })
         );
         
-        // Evolution events
+        // Evolution events - updated to use standardized event names
         this._registeredEvents.push(
-            eventSystem.on('evolutionPointsAwarded', data => {
+            eventSystem.on(EventTypes.EVOLUTION_POINTS_AWARDED.standard, data => {
                 // Add a text-only version to the log
                 if (data.pointsAwarded) {
                     const { chaos = 0, flow = 0, order = 0 } = data.pointsAwarded;
@@ -167,12 +169,12 @@ class MessageSystem {
         );
         
         this._registeredEvents.push(
-            eventSystem.on('traitPurchased', data => {
+            eventSystem.on('playerTraitPurchased', data => {
                 this.addLogMessage(`Acquired trait: ${data.trait.name}`, "event");
             })
         );
         
-        // Achievement events
+        // Achievement events - updated to use standardized event names
         this._registeredEvents.push(
             eventSystem.on('achievementsCompleted', data => {
                 data.achievements.forEach(achievement => {

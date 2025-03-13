@@ -3,6 +3,8 @@
  * Manages the hexagonal grid, tile generation, and system balance
  */
 import { RandomUtils } from '../utils/RandomUtils.js';
+import { eventSystem } from './EventSystem.js';
+import { EventTypes } from './EventTypes.js';
 
 export class Grid {
     /**
@@ -75,13 +77,16 @@ export class Grid {
             });
             
             // Emit the initial balance state
-            eventSystem.emit('systemBalanceChanged', {
-                chaos: this.systemChaos,
-                order: this.systemOrder,
-                systemChaos: this.systemChaos,
-                systemOrder: this.systemOrder,
-                chaosDelta: 0
-            });
+            eventSystem.emitStandardized(
+                EventTypes.SYSTEM_BALANCE_CHANGED.legacy,
+                EventTypes.SYSTEM_BALANCE_CHANGED.standard,
+                {
+                    chaos: this.systemChaos,
+                    order: this.systemOrder,
+                    systemChaos: this.systemChaos,
+                    systemOrder: this.systemOrder
+                }
+            );
             
             console.log(`Grid initialized with ${this.rows}x${this.cols} tiles`);
             return true;
@@ -355,12 +360,17 @@ export class Grid {
         hexCell.addEventListener('click', (e) => {
             console.log(`Tile clicked at (${row}, ${col})`);
             
-            // Emit tile clicked event
-            eventSystem.emit('tileClicked', {
-                row,
-                col,
-                tileEntity
-            });
+            // Emit tile clicked event using standardized event emission
+            eventSystem.emitStandardized(
+                EventTypes.TILE_CLICKED.legacy,
+                EventTypes.TILE_CLICKED.standard,
+                {
+                    row,
+                    col,
+                    tileEntity,
+                    isStandardized: true
+                }
+            );
             
             // Prevent event bubbling
             e.stopPropagation();
@@ -466,16 +476,20 @@ export class Grid {
         this.systemOrder = 1 - this.systemChaos;
         
         // Emit change event with consistent property names
-        eventSystem.emit('systemBalanceChanged', {
-            oldChaos,
-            oldOrder,
-            systemChaos: this.systemChaos,
-            systemOrder: this.systemOrder,
-            chaosDelta,
-            // Include simple property names for consistency
-            chaos: this.systemChaos,
-            order: this.systemOrder
-        });
+        eventSystem.emitStandardized(
+            EventTypes.SYSTEM_BALANCE_CHANGED.legacy,
+            EventTypes.SYSTEM_BALANCE_CHANGED.standard,
+            {
+                oldChaos,
+                oldOrder,
+                systemChaos: this.systemChaos,
+                systemOrder: this.systemOrder,
+                chaosDelta,
+                // Include simple property names for consistency
+                chaos: this.systemChaos,
+                order: this.systemOrder
+            }
+        );
         
         return this.getSystemBalance();
     }

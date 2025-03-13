@@ -4,6 +4,7 @@
  */
 import { eventSystem } from './EventSystem.js';
 import { entityManager } from './EntityManager.js';
+import { EventTypes } from './EventTypes.js';
 
 export class TurnSystem {
     /**
@@ -177,11 +178,16 @@ export class TurnSystem {
     startTurn() {
         console.log(`Starting turn ${this.turnCount}`);
         
-        // Emit turn start event
-        eventSystem.emit('turnStart', {
-            turnCount: this.turnCount,
-            gameStage: this.gameStage
-        });
+        // Emit turn start event using standardized format
+        eventSystem.emitStandardized(
+            EventTypes.TURN_START.legacy,
+            EventTypes.TURN_START.standard,
+            {
+                turnCount: this.turnCount,
+                gameStage: this.gameStage,
+                isStandardized: true
+            }
+        );
     }
     
     /**
@@ -208,11 +214,16 @@ export class TurnSystem {
         }
         */
         
-        // Emit turn end event
-        eventSystem.emit('turnEnd', {
-            turnCount: this.turnCount,
-            gameStage: this.gameStage
-        });
+        // Emit turn end event using standardized format
+        eventSystem.emitStandardized(
+            EventTypes.TURN_END.legacy,
+            EventTypes.TURN_END.standard,
+            {
+                turnCount: this.turnCount,
+                gameStage: this.gameStage,
+                isStandardized: true
+            }
+        );
         
         // Increment turn count
         this.turnCount++;
@@ -263,12 +274,17 @@ export class TurnSystem {
         // Get game state
         const gameState = this.getGameState();
         
-        // Emit victory event
-        eventSystem.emit('gameVictory', {
-            turnCount: this.turnCount,
-            gameStage: this.gameStage,
-            gameState
-        });
+        // Emit victory event using standardized format
+        eventSystem.emitStandardized(
+            EventTypes.GAME_VICTORY.legacy,
+            EventTypes.GAME_VICTORY.standard,
+            {
+                turnCount: this.turnCount,
+                gameStage: this.gameStage,
+                gameState,
+                isStandardized: true
+            }
+        );
         
         // Prepare for next stage if appropriate
         this.advanceGameStage();
@@ -282,13 +298,18 @@ export class TurnSystem {
         // Get game state
         const gameState = this.getGameState();
         
-        // Emit game over event
-        eventSystem.emit('gameOver', {
-            turnCount: this.turnCount,
-            gameStage: this.gameStage,
-            reason,
-            gameState
-        });
+        // Emit game over event using standardized format
+        eventSystem.emitStandardized(
+            EventTypes.GAME_OVER.legacy,
+            EventTypes.GAME_OVER.standard,
+            {
+                turnCount: this.turnCount,
+                gameStage: this.gameStage,
+                reason,
+                gameState,
+                isStandardized: true
+            }
+        );
     }
     
     /**
@@ -304,15 +325,19 @@ export class TurnSystem {
         const orderDiff = Math.abs(systemOrder - this.targetOrder);
         
         // Emit balance changed event
-        eventSystem.emit('systemBalanceChanged', {
-            chaos: systemChaos,
-            order: systemOrder,
-            targetChaos: this.targetChaos,
-            targetOrder: this.targetOrder,
-            chaosDiff,
-            orderDiff,
-            isBalanced: chaosDiff <= this.victoryThreshold && orderDiff <= this.victoryThreshold
-        });
+        eventSystem.emitStandardized(
+            EventTypes.SYSTEM_BALANCE_CHANGED.legacy,
+            EventTypes.SYSTEM_BALANCE_CHANGED.standard,
+            {
+                chaos: systemChaos,
+                order: systemOrder,
+                targetChaos: this.targetChaos,
+                targetOrder: this.targetOrder,
+                chaosDiff,
+                orderDiff,
+                isBalanced: chaosDiff <= this.victoryThreshold && orderDiff <= this.victoryThreshold
+            }
+        );
     }
     
     /**
@@ -337,12 +362,17 @@ export class TurnSystem {
                 break;
         }
         
-        // Emit level completed event with current stage info
-        eventSystem.emit('levelCompleted', {
-            turnCount: this.turnCount,
-            gameStage: this.gameStage,
-            nextStage
-        });
+        // Emit level completed event with current stage info using standardized format
+        eventSystem.emitStandardized(
+            EventTypes.LEVEL_COMPLETED.legacy,
+            EventTypes.LEVEL_COMPLETED.standard,
+            {
+                turnCount: this.turnCount,
+                gameStage: this.gameStage,
+                nextStage,
+                isStandardized: true
+            }
+        );
     }
     
     /**
@@ -511,14 +541,21 @@ export class TurnSystem {
         // Now that all points have been added, emit events
         
         // First emit playerEvolutionPointsChanged to update the UI display
-        eventSystem.emit('playerEvolutionPointsChanged', {
-            player: playerComponent,
-            chaosPoints: playerComponent.chaosEvolutionPoints,
-            flowPoints: playerComponent.flowEvolutionPoints,
-            orderPoints: playerComponent.orderEvolutionPoints,
-            totalPoints: playerComponent.evolutionPoints,
-            currentLevelPoints: this.currentLevelPoints
-        });
+        eventSystem.emitStandardized(
+            EventTypes.PLAYER_EVOLUTION_POINTS_CHANGED.legacy,
+            EventTypes.PLAYER_EVOLUTION_POINTS_CHANGED.standard,
+            {
+                player: playerComponent,
+                chaosPoints: playerComponent.chaosEvolutionPoints,
+                flowPoints: playerComponent.flowEvolutionPoints,
+                orderPoints: playerComponent.orderEvolutionPoints,
+                totalPoints: playerComponent.evolutionPoints,
+                currentLevelPoints: this.currentLevelPoints,
+                // Include isStandardized flag for consistency
+                isStandardized: true
+            },
+            EventTypes.PLAYER_EVOLUTION_POINTS_CHANGED.deprecation
+        );
         
         // Then emit evolutionPointsAwarded for the feedback message
         eventSystem.emit('evolutionPointsAwarded', {

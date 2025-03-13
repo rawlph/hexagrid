@@ -4,6 +4,8 @@
  */
 import { TileComponent } from './TileComponent.js';
 import { entityManager, Component } from '../core/EntityManager.js';
+import { eventSystem } from '../core/EventSystem.js';
+import { EventTypes } from '../core/EventTypes.js';
 
 export class PlayerComponent extends Component {
     /**
@@ -103,16 +105,22 @@ export class PlayerComponent extends Component {
         // Initialize array to store registrations
         this._registeredEvents = [];
         
-        // Listen for turn start/end - store references for proper cleanup
-        this._registeredEvents.push(eventSystem.on('turnStart', this.onTurnStart));
-        this._registeredEvents.push(eventSystem.on('turnEnd', this.onTurnEnd));
+        // Listen for turn start/end using standardized event types
+        this._registeredEvents.push(
+            eventSystem.on(EventTypes.TURN_START.standard, this.onTurnStart.bind(this))
+        );
+        this._registeredEvents.push(
+            eventSystem.on(EventTypes.TURN_END.standard, this.onTurnEnd.bind(this))
+        );
         
         // Listen for window resize to update marker position
         // Note: This is a DOM event, so we handle it differently
-        window.addEventListener('resize', this.updateMarkerPosition);
+        window.addEventListener('resize', this.updateMarkerPosition.bind(this));
         
-        // Listen for grid changes
-        this._registeredEvents.push(eventSystem.on('gridInitialized', this.updateMarkerPosition));
+        // Listen for grid changes with standardized event type
+        this._registeredEvents.push(
+            eventSystem.on(EventTypes.GRID_INITIALIZED.standard, this.updateMarkerPosition.bind(this))
+        );
     }
     
     /**
@@ -133,10 +141,12 @@ export class PlayerComponent extends Component {
      * Update player position
      * @param {number} newRow - New row position
      * @param {number} newCol - New column position
-     * @returns {boolean} Whether the move was successful
+     * @returns {boolean} Whether move was successful
      */
     updatePosition(newRow, newCol) {
-        console.log(`Moving player from (${this.row},${this.col}) to (${newRow},${newCol})`);
+        // Store previous position
+        const oldRow = this.row;
+        const oldCol = this.col;
         
         // Update position
         this.row = newRow;
@@ -150,12 +160,18 @@ export class PlayerComponent extends Component {
         // Track movement
         this.movesMade++;
         
-        // Emit movement event
-        eventSystem.emit('playerMoved', {
-            player: this,
-            row: newRow,
-            col: newCol
-        });
+        // Emit movement event (standardized)
+        eventSystem.emitStandardized(
+            EventTypes.PLAYER_MOVED.legacy,
+            EventTypes.PLAYER_MOVED.standard,
+            {
+                player: this,
+                row: newRow,
+                col: newCol,
+                fromRow: oldRow,
+                fromCol: oldCol
+            }
+        );
         
         return true;
     }
@@ -223,17 +239,27 @@ export class PlayerComponent extends Component {
      * @returns {boolean} Whether the action was set
      */
     setAction(action) {
+        // Skip if trying to set the same action
+        if (this.currentAction === action) {
+            return false;
+        }
+        
         console.log(`PlayerComponent.setAction called with ${action}, current action: ${this.currentAction}`);
         
         // Simply set the action, don't toggle if same action
         const oldAction = this.currentAction;
         this.currentAction = action;
         
-        // Emit action changed event
-        eventSystem.emit('playerActionChanged', {
-            oldAction: oldAction,
-            action: this.currentAction
-        });
+        // Emit action changed event (standardized)
+        eventSystem.emitStandardized(
+            EventTypes.PLAYER_ACTION_CHANGED.legacy,
+            EventTypes.PLAYER_ACTION_CHANGED.standard,
+            {
+                player: this,
+                oldAction: oldAction,
+                action: this.currentAction
+            }
+        );
         
         return true;
     }
@@ -300,65 +326,141 @@ export class PlayerComponent extends Component {
         this.energy = Math.max(0, this.energy - amount);
         
         // Emit energy changed event with standardized property name
-        eventSystem.emit('playerEnergyChanged', {
-            player: this,
-            oldEnergy: oldEnergy,
-            energy: this.energy,
-            // Include legacy properties for backward compatibility (temporary)
-            newEnergy: this.energy,
-            delta: this.energy - oldEnergy
-        });
+        eventSystem.emitStandardized(
+            EventTypes.PLAYER_ENERGY_CHANGED.legacy,
+            EventTypes.PLAYER_ENERGY_CHANGED.standard,
+            {
+                player: this,
+                oldEnergy: oldEnergy,
+                energy: this.energy,
+                // Include for backward compatibility (temporary)
+                newEnergy: this.energy,
+                delta: this.energy - oldEnergy
+            }
+        );
         
         console.log(`Energy updated: ${oldEnergy} -> ${this.energy} (delta: ${this.energy - oldEnergy})`);
         return true;
     }
     
     /**
-     * Use a movement point
-     * @returns {boolean} Whether a movement point was available
+     * Add energy to the player
+     * @param {number} amount - Amount of energy to add
+     * @returns {boolean} Always returns true
      */
-    useMovementPoint() {
-        // Check if we have movement points
-        if (this.movementPoints <= 0) return false;
+    addEnergy(amount) {
+        console.log(`PlayerComponent.addEnergy: Adding ${amount} energy, current energy: ${this.energy}`);
+        
+        // Store old energy value
+        const oldEnergy = this.energy;
+        
+        // Add energy, but don't exceed maximum
+        this.energy = Math.min(this.maxEnergy, this.energy + amount);
+        
+        // Emit energy changed event
+        eventSystem.emitStandardized(
+            EventTypes.PLAYER_ENERGY_CHANGED.legacy,
+            EventTypes.PLAYER_ENERGY_CHANGED.standard,
+            {
+                player: this,
+                oldEnergy: oldEnergy,
+                energy: this.energy,
+                // Include for backward compatibility (temporary)
+                newEnergy: this.energy,
+                delta: this.energy - oldEnergy,
+                energyRestored: amount
+            }
+        );
+        
+        console.log(`Energy updated: ${oldEnergy} -> ${this.energy} (delta: ${this.energy - oldEnergy})`);
+        return true;
+    }
+    
+    /**
+     * Use movement points
+     * @param {number} amount - Amount of movement points to use
+     * @returns {boolean} Whether enough movement points were available
+     */
+    useMovementPoints(amount) {
+        console.log(`PlayerComponent.useMovementPoints: Using ${amount} movement points, current: ${this.movementPoints}`);
+        
+        // Check if we have enough movement points
+        if (this.movementPoints < amount) {
+            console.warn(`Not enough movement points: have ${this.movementPoints}, need ${amount}`);
+            return false;
+        }
         
         // Store old value
-        const oldPoints = this.movementPoints;
+        const oldMovementPoints = this.movementPoints;
         
-        // Deduct point
-        this.movementPoints--;
+        // Deduct movement points
+        this.movementPoints = Math.max(0, this.movementPoints - amount);
         
         // Emit movement points changed event
-        eventSystem.emit('playerMovementPointsChanged', {
-            player: this,
-            oldPoints: oldPoints,
-            newPoints: this.movementPoints,
-            delta: -1
-        });
+        eventSystem.emitStandardized(
+            EventTypes.PLAYER_MOVEMENT_POINTS_CHANGED.legacy,
+            EventTypes.PLAYER_MOVEMENT_POINTS_CHANGED.standard,
+            {
+                player: this,
+                oldMovementPoints: oldMovementPoints,
+                movementPoints: this.movementPoints,
+                // Include for backward compatibility (temporary)
+                newMovementPoints: this.movementPoints,
+                delta: this.movementPoints - oldMovementPoints
+            }
+        );
         
+        console.log(`Movement points updated: ${oldMovementPoints} -> ${this.movementPoints}`);
+        return true;
+    }
+    
+    /**
+     * Add movement points to the player
+     * @param {number} amount - Amount of movement points to add
+     * @returns {boolean} Always returns true
+     */
+    addMovementPoints(amount) {
+        console.log(`PlayerComponent.addMovementPoints: Adding ${amount} movement points, current: ${this.movementPoints}`);
+        
+        // Store old value
+        const oldMovementPoints = this.movementPoints;
+        
+        // Add movement points, but don't exceed maximum
+        this.movementPoints = Math.min(this.maxMovementPoints, this.movementPoints + amount);
+        
+        // Emit movement points changed event
+        eventSystem.emitStandardized(
+            EventTypes.PLAYER_MOVEMENT_POINTS_CHANGED.legacy,
+            EventTypes.PLAYER_MOVEMENT_POINTS_CHANGED.standard,
+            {
+                player: this,
+                oldMovementPoints: oldMovementPoints,
+                movementPoints: this.movementPoints,
+                // Include for backward compatibility (temporary)
+                newMovementPoints: this.movementPoints,
+                delta: this.movementPoints - oldMovementPoints,
+                movementPointsRestored: amount
+            }
+        );
+        
+        console.log(`Movement points updated: ${oldMovementPoints} -> ${this.movementPoints}`);
         return true;
     }
     
     /**
      * Add a trait to the player
-     * @param {Object} trait - Trait object to add
-     * @returns {boolean} Whether the trait was added
+     * @param {Object} trait - Trait to add
+     * @returns {boolean} Whether trait was added
      */
     addTrait(trait) {
-        // Ensure traits is initialized
-        if (!this.traits) {
-            this.traits = [];
-            console.warn('PlayerComponent: traits array was not initialized, creating it now');
-        }
-        
-        // Validate trait object
         if (!trait || !trait.id) {
-            console.error('PlayerComponent: Cannot add invalid trait without id');
+            console.error('Invalid trait:', trait);
             return false;
         }
         
         // Check if we already have this trait
-        if (this.traits.some(t => t && t.id === trait.id)) {
-            console.log(`PlayerComponent: Player already has trait ${trait.id}, not adding again`);
+        if (this.traits.some(t => t.id === trait.id)) {
+            console.log(`Player already has trait ${trait.id}`);
             return false;
         }
         
@@ -369,12 +471,16 @@ export class PlayerComponent extends Component {
         this.applyTraitEffects(trait);
         
         // Emit trait added event
-        eventSystem.emit('playerTraitAdded', {
-            player: this,
-            trait: trait
-        });
+        eventSystem.emitStandardized(
+            EventTypes.PLAYER_TRAIT_ADDED.legacy,
+            EventTypes.PLAYER_TRAIT_ADDED.standard,
+            {
+                player: this,
+                trait: trait
+            }
+        );
         
-        console.log(`PlayerComponent: Added trait ${trait.id} (${trait.name})`);
+        console.log(`Added trait: ${trait.name} (${trait.id})`);
         return true;
     }
     
@@ -399,6 +505,29 @@ export class PlayerComponent extends Component {
             // Refill to new max
             this.energy = this.maxEnergy;
             this.movementPoints = this.maxMovementPoints;
+            
+            // Emit events for resource changes
+            eventSystem.emitStandardized(
+                EventTypes.PLAYER_ENERGY_CHANGED.legacy,
+                EventTypes.PLAYER_ENERGY_CHANGED.standard,
+                {
+                    player: this,
+                    oldEnergy: this.energy,
+                    energy: this.energy,
+                    delta: 0
+                }
+            );
+            
+            eventSystem.emitStandardized(
+                EventTypes.PLAYER_MOVEMENT_POINTS_CHANGED.legacy,
+                EventTypes.PLAYER_MOVEMENT_POINTS_CHANGED.standard,
+                {
+                    player: this,
+                    oldMovementPoints: this.movementPoints,
+                    movementPoints: this.movementPoints,
+                    delta: 0
+                }
+            );
         }
         
         // Apply onAcquire effect if it exists (and is a function)
@@ -443,13 +572,22 @@ export class PlayerComponent extends Component {
         
         // Emit event unless suppressed
         if (!suppressEvent && window.eventSystem) {
-            window.eventSystem.emit('playerEvolutionPointsChanged', {
-                player: this,
-                chaosPoints: this.chaosEvolutionPoints,
-                flowPoints: this.flowEvolutionPoints,
-                orderPoints: this.orderEvolutionPoints,
-                totalPoints: this.evolutionPoints
-            });
+            window.eventSystem.emitStandardized(
+                EventTypes.PLAYER_EVOLUTION_POINTS_CHANGED.legacy,
+                EventTypes.PLAYER_EVOLUTION_POINTS_CHANGED.standard,
+                {
+                    player: this,
+                    chaosPoints: this.chaosEvolutionPoints,
+                    flowPoints: this.flowEvolutionPoints,
+                    orderPoints: this.orderEvolutionPoints,
+                    totalPoints: this.evolutionPoints,
+                    added: amount,
+                    addedType: type,
+                    // Include isStandardized flag for consistency
+                    isStandardized: true
+                },
+                EventTypes.PLAYER_EVOLUTION_POINTS_CHANGED.deprecation
+            );
         }
         
         console.log(`Added ${amount} ${type} evolution points. New total: ${this.evolutionPoints}`);
@@ -474,13 +612,21 @@ export class PlayerComponent extends Component {
         const oldPoints = this.movementPoints;
         this.movementPoints = this.maxMovementPoints;
         
-        // Emit movement points changed event
-        eventSystem.emit('playerMovementPointsChanged', {
-            player: this,
-            oldPoints: oldPoints,
-            newPoints: this.movementPoints,
-            delta: this.movementPoints - oldPoints
-        });
+        // Emit movement points changed event - use standardized emission with deprecation info
+        eventSystem.emitStandardized(
+            EventTypes.PLAYER_MOVEMENT_POINTS_CHANGED.legacy,
+            EventTypes.PLAYER_MOVEMENT_POINTS_CHANGED.standard,
+            {
+                player: this,
+                oldMovementPoints: oldPoints,
+                movementPoints: this.movementPoints,
+                // Include legacy properties for backward compatibility
+                oldPoints: oldPoints,
+                newPoints: this.movementPoints,
+                delta: this.movementPoints - oldPoints
+            },
+            EventTypes.PLAYER_MOVEMENT_POINTS_CHANGED.deprecation
+        );
         
         // Apply energy recovery - fixed to match documentation (was +2, should be +5)
         const oldEnergy = this.energy;
@@ -501,18 +647,23 @@ export class PlayerComponent extends Component {
         
         this.energy = Math.min(this.maxEnergy, this.energy + finalRecovery);
         
-        // Emit energy changed event if energy changed
+        // Emit energy changed event if energy changed - use standardized emission with deprecation info
         if (this.energy !== oldEnergy) {
-            eventSystem.emit('playerEnergyChanged', {
-                player: this,
-                oldEnergy: oldEnergy,
-                energy: this.energy,
-                // Include legacy properties for backward compatibility (temporary)
-                newEnergy: this.energy,
-                delta: this.energy - oldEnergy,
-                // Include specific property for metrics tracking
-                energyRestored: finalRecovery
-            });
+            eventSystem.emitStandardized(
+                EventTypes.PLAYER_ENERGY_CHANGED.legacy,
+                EventTypes.PLAYER_ENERGY_CHANGED.standard,
+                {
+                    player: this,
+                    oldEnergy: oldEnergy,
+                    energy: this.energy,
+                    // Include legacy properties for backward compatibility
+                    newEnergy: this.energy,
+                    delta: this.energy - oldEnergy,
+                    // Include specific property for metrics tracking
+                    energyRestored: finalRecovery
+                },
+                EventTypes.PLAYER_ENERGY_CHANGED.deprecation
+            );
         }
         
         // Make sure marker is visible and positioned correctly
@@ -526,22 +677,31 @@ export class PlayerComponent extends Component {
     onTurnEnd(data) {
         console.log(`Turn end event received with turn count: ${data.turnCount}`);
         
-        // Clear current action
-        this.setAction(null);
+        // Clear current action only if it's not already null
+        if (this.currentAction !== null) {
+            this.setAction(null);
+        }
         
         // Increment turns completed
         this.turnsCompleted++;
         
         // Note: Evolution points are now awarded in the TurnSystem
         
-        // Emit stats update event
-        eventSystem.emit('playerStatsUpdated', {
-            player: this,
-            tilesExplored: this.tilesExplored,
-            movesMade: this.movesMade,
-            actionsPerformed: this.actionsPerformed,
-            turnsCompleted: this.turnsCompleted
-        });
+        // Emit stats update event using standardized format with deprecation info
+        eventSystem.emitStandardized(
+            EventTypes.PLAYER_STATS_UPDATED.legacy,
+            EventTypes.PLAYER_STATS_UPDATED.standard,
+            {
+                player: this,
+                tilesExplored: this.tilesExplored,
+                movesMade: this.movesMade,
+                actionsPerformed: this.actionsPerformed,
+                turnsCompleted: this.turnsCompleted,
+                // Include isStandardized flag for consistency
+                isStandardized: true
+            },
+            EventTypes.PLAYER_STATS_UPDATED.deprecation
+        );
     }
     
     /**
@@ -602,6 +762,12 @@ export class PlayerComponent extends Component {
             return; // No traits to apply
         }
         
+        // Store old stat values before resetting
+        const oldMaxEnergy = this.maxEnergy;
+        const oldMaxMovementPoints = this.maxMovementPoints;
+        const oldEnergy = this.energy;
+        const oldMovementPoints = this.movementPoints;
+        
         // Reset stats to base values
         this.maxEnergy = 10; // Base max energy
         this.maxMovementPoints = 3; // Base max movement points
@@ -640,13 +806,45 @@ export class PlayerComponent extends Component {
         this.energy = this.maxEnergy;
         this.movementPoints = this.maxMovementPoints;
         
-        // Emit stats updated event
-        eventSystem.emit('playerStatsUpdated', {
+        // Emit energy changed event using standardized format with deprecation info
+        eventSystem.emitStandardized(
+            EventTypes.PLAYER_ENERGY_CHANGED.legacy,
+            EventTypes.PLAYER_ENERGY_CHANGED.standard,
+            {
+                player: this,
+                oldEnergy: oldEnergy,
+                energy: this.energy,
+                // Include legacy properties for backward compatibility
+                newEnergy: this.energy,
+                delta: this.energy - oldEnergy
+            },
+            EventTypes.PLAYER_ENERGY_CHANGED.deprecation
+        );
+        
+        // Emit movement points changed event using standardized format with deprecation info
+        eventSystem.emitStandardized(
+            EventTypes.PLAYER_MOVEMENT_POINTS_CHANGED.legacy,
+            EventTypes.PLAYER_MOVEMENT_POINTS_CHANGED.standard,
+            {
+                player: this,
+                oldMovementPoints: oldMovementPoints,
+                movementPoints: this.movementPoints,
+                // Include legacy properties for backward compatibility
+                oldPoints: oldMovementPoints,
+                newPoints: this.movementPoints,
+                delta: this.movementPoints - oldMovementPoints
+            },
+            EventTypes.PLAYER_MOVEMENT_POINTS_CHANGED.deprecation
+        );
+        
+        // Emit stats updated event using standardized format
+        eventSystem.emit(EventTypes.PLAYER_STATS_UPDATED.standard, {
             player: this,
             maxEnergy: this.maxEnergy,
             maxMovementPoints: this.maxMovementPoints,
             energy: this.energy,
-            movementPoints: this.movementPoints
+            movementPoints: this.movementPoints,
+            isStandardized: true
         });
         
         console.log(`PlayerComponent: Applied effects from ${this.traits.length} traits. New stats: Energy=${this.maxEnergy}, Movement=${this.maxMovementPoints}`);

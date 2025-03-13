@@ -5,6 +5,7 @@ import { eventSystem } from '../core/EventSystem.js';
 import { TileComponent } from '../components/TileComponent.js';
 import { PlayerComponent } from '../components/PlayerComponent.js';
 import { entityManager } from '../core/EntityManager.js';
+import { EventTypes } from '../core/EventTypes.js';
 
 export class ActionPanel {
     /**
@@ -168,31 +169,31 @@ export class ActionPanel {
     registerEventListeners() {
         // Listen for tile clicks
         this._registeredEvents.push(
-            eventSystem.on('tileClicked', this.handleTileClick.bind(this))
+            eventSystem.on(EventTypes.TILE_CLICKED.standard, this.handleTileClick.bind(this))
         );
         
         // Listen for player movement point changes
         this._registeredEvents.push(
-            eventSystem.on('playerMovementPointsChanged', this.updateButtonStates.bind(this))
+            eventSystem.on(EventTypes.PLAYER_MOVEMENT_POINTS_CHANGED.standard, this.updateButtonStates.bind(this))
         );
         
         // Listen for player energy changes
         this._registeredEvents.push(
-            eventSystem.on('playerEnergyChanged', this.updateButtonStates.bind(this))
+            eventSystem.on(EventTypes.PLAYER_ENERGY_CHANGED.standard, this.updateButtonStates.bind(this))
         );
         
         // Listen for turn changes
         this._registeredEvents.push(
-            eventSystem.on('turnStart', this.onTurnStart.bind(this))
+            eventSystem.on(EventTypes.TURN_START.standard, this.onTurnStart.bind(this))
         );
         
         this._registeredEvents.push(
-            eventSystem.on('turnEnd', this.onTurnEnd.bind(this))
+            eventSystem.on(EventTypes.TURN_END.standard, this.onTurnEnd.bind(this))
         );
         
         // Listen for action changes
         this._registeredEvents.push(
-            eventSystem.on('playerActionChanged', this.onPlayerActionChanged.bind(this))
+            eventSystem.on(EventTypes.PLAYER_ACTION_CHANGED.standard, this.onPlayerActionChanged.bind(this))
         );
     }
     
@@ -271,11 +272,11 @@ export class ActionPanel {
         // Clear current action in the ActionPanel
         this.currentAction = null;
         
-        // Also clear it in the PlayerComponent
+        // Only clear the PlayerComponent action if it's not already null
         const playerEntity = this.entityManager ? this.entityManager.getEntitiesByTag('player')[0] : null;
         if (playerEntity) {
             const playerComponent = playerEntity.getComponent(PlayerComponent);
-            if (playerComponent) {
+            if (playerComponent && playerComponent.currentAction !== null) {
                 playerComponent.setAction(null);
             }
         }
@@ -341,38 +342,34 @@ export class ActionPanel {
             return;
         }
         
+        // Check if the target tile is adjacent to the player for all actions
+        const isAdjacent = playerComponent.isAdjacentTo(data.row, data.col);
+        
+        // For move action, the target must be adjacent
+        if (playerComponent.currentAction === 'move' && !isAdjacent) {
+            this.showFeedback("You can only move to adjacent tiles", 'warning', 2000, false, 'action-error');
+            return;
+        }
+        
         // Execute the action
         this.executeAction(playerComponent.currentAction, data.row, data.col, playerComponent);
     }
     
     /**
-     * Check if the player has enough energy for an action
-     * @param {PlayerComponent} playerComponent - The player component
-     * @param {number} energyCost - Energy cost of the action
-     * @returns {boolean} True if the player has enough energy
-     */
-    hasEnoughEnergy(playerComponent, energyCost) {
-        if (playerComponent.energy < energyCost) {
-            this.showFeedback(`Not enough energy! Need ${energyCost}`, 'warning', 2000, false, 'resource-depleted');
-            return false;
-        }
-        return true;
-    }
-
-    /**
      * Update system balance
-     * @param {number} chaosDelta - Change in chaos level
+     * @param {number} chaosDelta - Change in chaos level (-1 to 1) 
      */
     updateSystemBalance(chaosDelta) {
-        // Validate input to prevent NaN or invalid values
-        if (typeof chaosDelta !== 'number' || isNaN(chaosDelta)) {
-            console.warn("ActionPanel.updateSystemBalance: Invalid chaosDelta:", chaosDelta);
+        if (typeof chaosDelta !== 'number') {
+            console.error("ActionPanel: chaosDelta must be a number");
             return;
         }
         
         if (this.grid) {
-            // Apply reduced effect for better gameplay balance
-            const scaledDelta = chaosDelta / 10; 
+            // Apply reduced effect but ensure it's still significant
+            // Change from dividing by 10 to dividing by 5 for a more noticeable impact
+            const scaledDelta = chaosDelta / 5;
+            console.log(`ActionPanel: Updating system balance with scaled delta: ${scaledDelta} (original: ${chaosDelta})`);
             this.grid.updateSystemBalance(scaledDelta);
         } else {
             console.error("ActionPanel: Grid not available. Could not update system balance.");
@@ -389,7 +386,7 @@ export class ActionPanel {
         if (success) {
             this.showFeedback(`${action} successful: ${details}`, 'success', 2000, true, 'action-success');
         } else {
-            this.showFeedback(`${action} failed: ${details}`, 'error', 2000, true, 'action-error');
+            this.showFeedback(`${action} failed: ${details}`, 'warning', 2000, false, 'action-failed');
         }
     }
 
@@ -403,68 +400,68 @@ export class ActionPanel {
     executeAction(action, row, col, playerComponent) {
         console.log(`Executing ${action} action on tile (${row}, ${col})`);
         
-        // Check if target is adjacent to player (or same tile for non-move actions)
-        const isAdjacentOrSame = 
-            (row === playerComponent.row && col === playerComponent.col) || 
-            playerComponent.isAdjacentTo(row, col);
-            
-        if (!isAdjacentOrSame && action !== 'move') {
-            this.showFeedback(`Cannot ${action} a non-adjacent tile.`, 'warning', 2000, false, 'action-invalid');
-            return;
-        }
+        // Get target tile component
+        const targetEntity = this.entityManager.getEntitiesByTag(`tile_${row}_${col}`)[0];
         
-        // Get target tile entity
-        const tileEntity = this.entityManager ? this.entityManager.getEntitiesByTag(`tile_${row}_${col}`)[0] : null;
-        if (!tileEntity) {
+        if (!targetEntity) {
             console.error(`No tile entity found at (${row}, ${col})`);
+            this.showFeedback(`Cannot ${action} - tile not found`, 'error', 2000, false, 'action-error');
             return;
         }
         
-        const tileComponent = tileEntity.getComponent(TileComponent);
+        const tileComponent = targetEntity.getComponent(TileComponent);
+        
         if (!tileComponent) {
-            console.error(`No TileComponent found for tile at (${row}, ${col})`);
+            console.error(`No tile component found at (${row}, ${col})`);
+            this.showFeedback(`Cannot ${action} - invalid tile`, 'error', 2000, false, 'action-error');
             return;
         }
         
-        // Get energy cost for the action
+        // Check if energy cost can be paid
         const energyCost = playerComponent.getActionCost(action, row, col);
-        if (energyCost === -1) {
-            this.showFeedback(`Cannot ${action} on that tile type`, 'warning', 2000, false, 'action-invalid');
+        if (energyCost < 0) {
+            this.showFeedback(`Cannot ${action} here`, 'warning', 2000, false, 'action-invalid');
             return;
         }
         
-        // Check if player has enough energy
-        if (!this.hasEnoughEnergy(playerComponent, energyCost)) {
+        if (playerComponent.energy < energyCost) {
+            this.showFeedback(`Not enough energy for ${action} (need ${energyCost})`, 'warning', 2000, false, 'resource-depleted');
+            return;
+        }
+        
+        // Check adjacency for all actions (standardizing behavior)
+        const isAdjacent = playerComponent.isAdjacentTo(row, col);
+        if (!isAdjacent) {
+            this.showFeedback(`You can only ${action} adjacent tiles`, 'warning', 2000, false, 'action-error');
             return;
         }
         
         // Execute the specific action
         let success = false;
+        const actionData = {
+            player: playerComponent,
+            tileComponent: tileComponent,
+            row: row,
+            col: col,
+            energyCost: energyCost
+        };
         
-        // Flag to track if feedback was already shown in the action method
-        let feedbackShown = false;
-        
+        // Execute the appropriate action
         switch (action) {
             case 'move':
-                success = this.executeMoveAction(playerComponent, row, col, energyCost);
-                // Move action doesn't show its own feedback, so we need to do it here
-                if (success) {
-                    this.showFeedback(`Moved to (${row}, ${col}). Energy: -${energyCost}`, "success", 2000, true, 'action-move');
-                    feedbackShown = true;
-                }
+                success = this.executeMoveAction(actionData);
                 break;
                 
             case 'sense':
+                success = this.executeSenseAction(actionData);
+                break;
+                
             case 'interact':
+                success = this.executeInteractAction(actionData);
+                break;
+                
             case 'stabilize':
-                // For these actions, feedback is already shown in their respective methods
-                if (action === 'sense') {
-                    success = this.executeSenseAction(playerComponent, tileComponent, row, col, energyCost);
-                } else if (action === 'interact') {
-                    success = this.executeInteractAction(playerComponent, tileComponent, row, col, energyCost);
-                } else if (action === 'stabilize') {
-                    success = this.executeStabilizeAction(playerComponent, tileComponent, row, col, energyCost);
-                }
+                success = this.executeStabilizeAction(actionData);
                 break;
                 
             default:
@@ -472,265 +469,274 @@ export class ActionPanel {
                 return;
         }
         
-        // Provide feedback if not already shown
-        if (!feedbackShown && !success) {
-            this.provideActionFeedback(action, success, `${action} failed`);
+        // If action failed, show feedback and return
+        if (!success) {
+            this.showFeedback(`${action} action failed`, 'warning', 2000, false, 'action-failed');
+            return;
         }
         
-        // If action was successful, handle resource changes
-        if (success) {
-            // Log energy before consumption
-            console.log(`Before energy consumption: Player energy = ${playerComponent.energy}, Cost = ${energyCost}`);
-            
-            // Use energy
-            const energyUsed = playerComponent.useEnergy(energyCost);
-            
-            console.log(`After energy consumption: Success = ${energyUsed}, New energy = ${playerComponent.energy}`);
-            
-            // Use movement point
-            playerComponent.useMovementPoint();
-            
-            // We no longer clear the action after successful execution
-            // This allows players to perform the same action multiple times
-            // Instead, check if player can still perform actions
-            
-            // If player has no movement points left, deselect the action
-            if (playerComponent.movementPoints <= 0) {
-                playerComponent.setAction(null);
-                this.currentAction = null;
-                this.showFeedback("No movement points left! Action deselected.", "warning", 2000, true, 'resource-depleted');
-            }
-            
-            // If player doesn't have enough energy for another action, deselect
-            else if (playerComponent.energy < energyCost) {
-                playerComponent.setAction(null);
-                this.currentAction = null;
-                this.showFeedback("Not enough energy for another action! Action deselected.", "warning", 2000, true, 'resource-depleted');
-            }
-            
-            // Update UI
-            this.updateButtonStates();
+        // If action was successful, consume resources
+        playerComponent.useEnergy(energyCost);
+        playerComponent.useMovementPoints(1);
+        
+        // Check if player can continue actions
+        if (playerComponent.movementPoints <= 0) {
+            playerComponent.setAction(null);
+            this.currentAction = null;
+            this.showFeedback("No movement points left! Action deselected.", "warning", 2000, true, 'resource-depleted');
+        } else if (playerComponent.energy < energyCost) {
+            playerComponent.setAction(null);
+            this.currentAction = null;
+            this.showFeedback("Not enough energy for another action! Action deselected.", "warning", 2000, true, 'resource-depleted');
         }
+        
+        // Update UI
+        this.updateButtonStates();
     }
     
     /**
-     * Execute move action
-     * @param {PlayerComponent} playerComponent - The player component
-     * @param {number} row - Target row
-     * @param {number} col - Target column
-     * @param {number} energyCost - Energy cost
+     * Execute a move action
+     * @param {Object} actionData - Data for the action
+     * @param {PlayerComponent} actionData.player - Player component
+     * @param {TileComponent} actionData.tileComponent - Tile component
+     * @param {number} actionData.row - Target row
+     * @param {number} actionData.col - Target column
+     * @param {number} actionData.energyCost - Energy cost
      * @returns {boolean} True if successful
      */
-    executeMoveAction(playerComponent, row, col, energyCost) {
+    executeMoveAction(actionData) {
+        const { player, tileComponent, row, col } = actionData;
+        
         // Try to move the player
-        const success = playerComponent.updatePosition(row, col);
+        const success = player.updatePosition(row, col);
         
         if (success) {
-            this.updateSystemBalance(0); // No chaos change for move
+            // Update system balance (move has no chaos effect)
+            this.updateSystemBalance(0);
             
             // Emit standardized event
-            eventSystem.emit('action:complete:move', {
-                player: playerComponent,
+            eventSystem.emitStandardized(
+                EventTypes.ACTION_COMPLETE_MOVE.legacy,
+                EventTypes.ACTION_COMPLETE_MOVE.standard,
+                {
+                    player: player,
+                    tileComponent: tileComponent,
+                    row: row,
+                    col: col,
+                    timestamp: Date.now(),
+                    isStandardized: true
+                }
+            );
+            
+            // Show feedback
+            this.showFeedback(`Moved to (${row}, ${col})`, "success", 2000, true, 'action-move');
+            
+            return true;
+        }
+        
+        return false;
+    }
+    
+    /**
+     * Execute a sense action
+     * @param {Object} actionData - Data for the action
+     * @param {PlayerComponent} actionData.player - Player component
+     * @param {TileComponent} actionData.tileComponent - Tile component
+     * @param {number} actionData.row - Target row
+     * @param {number} actionData.col - Target column
+     * @param {number} actionData.energyCost - Energy cost
+     * @returns {boolean} True if successful
+     */
+    executeSenseAction(actionData) {
+        const { player, tileComponent, row, col } = actionData;
+        
+        // Get tile info
+        const tileInfo = tileComponent.getData();
+        
+        // Mark tile as explored
+        tileComponent.markExplored();
+        
+        // Update system balance
+        const chaosDelta = 0.05; // Sensing increases chaos slightly
+        this.updateSystemBalance(chaosDelta);
+        
+        // Emit standardized event
+        eventSystem.emitStandardized(
+            EventTypes.ACTION_COMPLETE_SENSE.legacy,
+            EventTypes.ACTION_COMPLETE_SENSE.standard,
+            {
+                player: player,
+                tileComponent: tileComponent,
                 row: row,
-                col: col
-            });
-            
-            // Show feedback - will be handled by the calling method
-        }
-        
-        return success;
-    }
-    
-    /**
-     * Execute sense action
-     * @param {PlayerComponent} playerComponent - The player component
-     * @param {TileComponent} tileComponent - The tile component
-     * @param {number} row - Target row
-     * @param {number} col - Target column
-     * @param {number} energyCost - Energy cost
-     * @returns {boolean} True if successful
-     */
-    executeSenseAction(playerComponent, tileComponent, row, col, energyCost) {
-        // Mark tile as explored
-        tileComponent.markExplored();
-        
-        // Apply visual effect using the renamed method
-        if (typeof tileComponent.applyVisualEffect === 'function') {
-            tileComponent.applyVisualEffect('sense-effect');
-        } else if (typeof tileComponent.applyEffect === 'function') {
-            // Backward compatibility for older method name
-            console.warn('ActionPanel: Using deprecated tileComponent.applyEffect method');
-            tileComponent.applyEffect('sense-effect');
-        }
-        
-        // Show detailed tile information
-        const chaosLevel = Math.round(tileComponent.chaos * 100);
-        const orderLevel = Math.round(tileComponent.order * 100);
-        
-        // Show feedback and add to log
-        this.showFeedback(`Sensed ${tileComponent.type} tile: ${tileComponent.getChaosDescription()} (${orderLevel}% order, ${chaosLevel}% chaos)`, "success", 2000, true, 'action-sense');
-        
-        // Emit standardized event only (remove legacy event)
-        eventSystem.emit('action:complete:sense', {
-            player: playerComponent,
-            tileComponent: tileComponent,
-            row: row,
-            col: col,
-            chaosLevel: tileComponent.chaos,
-            orderLevel: tileComponent.order
-        });
-        
-        return true;
-    }
-    
-    /**
-     * Execute interact action
-     * @param {PlayerComponent} playerComponent - The player component
-     * @param {TileComponent} tileComponent - The tile component
-     * @param {number} row - Target row
-     * @param {number} col - Target column
-     * @param {number} energyCost - Energy cost
-     * @returns {boolean} True if successful
-     */
-    executeInteractAction(playerComponent, tileComponent, row, col, energyCost) {
-        // Apply visual effect using the renamed method
-        if (typeof tileComponent.applyVisualEffect === 'function') {
-            tileComponent.applyVisualEffect('interact-effect');
-        } else if (typeof tileComponent.applyEffect === 'function') {
-            // Backward compatibility for older method name
-            console.warn('ActionPanel: Using deprecated tileComponent.applyEffect method');
-            tileComponent.applyEffect('interact-effect');
-        }
-        
-        // Mark tile as explored
-        tileComponent.markExplored();
-        
-        let feedbackMessage = "";
-        
-        // Random effect - slightly biased towards increasing chaos to make it easier to gain chaos points
-        const rand = Math.random();
-        
-        if (rand < 0.2) {
-            // Reduce chaos
-            const oldChaos = tileComponent.chaos;
-            const newChaos = Math.max(0, oldChaos - 0.1 - Math.random() * 0.1);
-            tileComponent.updateChaosLevel(newChaos - oldChaos);
-            
-            // Update system balance
-            this.updateSystemBalance(newChaos - oldChaos);
-            
-            feedbackMessage = `Interaction reduced chaos slightly`;
-        } else if (rand < 0.7) {  // Increased from 0.6 to 0.7 - more chance to increase chaos
-            // Increase chaos
-            const oldChaos = tileComponent.chaos;
-            const newChaos = Math.min(1, oldChaos + 0.15 + Math.random() * 0.15);  // Increased from 0.1 to 0.15 for both base and random
-            tileComponent.updateChaosLevel(newChaos - oldChaos);
-            
-            // Update system balance
-            this.updateSystemBalance(newChaos - oldChaos);
-            
-            feedbackMessage = `Interaction increased chaos significantly`;
-        } else {
-            // Change tile type
-            const tileTypes = ['normal', 'forest', 'mountain', 'desert'];
-            const newType = tileTypes[Math.floor(Math.random() * tileTypes.length)];
-            
-            if (newType !== tileComponent.type) {
-                tileComponent.changeType(newType);
-                feedbackMessage = `Interaction transformed tile to ${newType}`;
-            } else {
-                feedbackMessage = `Interaction had no effect on tile type`;
+                col: col,
+                tileInfo: tileInfo,
+                timestamp: Date.now(),
+                isStandardized: true
             }
-        }
+        );
         
-        // Show feedback and add to log
-        this.showFeedback(feedbackMessage, "success", 2000, true, 'action-interact');
-        
-        // Emit standardized event only (remove legacy event)
-        eventSystem.emit('action:complete:interact', {
-            player: playerComponent,
-            tileComponent: tileComponent,
-            row: row,
-            col: col
-        });
+        // Show feedback
+        this.showFeedback(`Sensed ${tileComponent.type} tile at (${row}, ${col})`, "success", 2000, true, 'action-sense');
         
         return true;
     }
     
     /**
-     * Execute stabilize action
-     * @param {PlayerComponent} playerComponent - Player component
-     * @param {TileComponent} tileComponent - Tile component
-     * @param {number} row - Target row
-     * @param {number} col - Target column
-     * @param {number} energyCost - Energy cost
+     * Execute an interact action
+     * @param {Object} actionData - Data for the action
+     * @param {PlayerComponent} actionData.player - Player component
+     * @param {TileComponent} actionData.tileComponent - Tile component
+     * @param {number} actionData.row - Target row
+     * @param {number} actionData.col - Target column
+     * @param {number} actionData.energyCost - Energy cost
      * @returns {boolean} True if successful
      */
-    executeStabilizeAction(playerComponent, tileComponent, row, col, energyCost) {
-        // Ensure traits array exists
-        if (!playerComponent.traits) {
-            console.warn('ActionPanel: playerComponent.traits not initialized, creating empty array');
-            playerComponent.traits = [];
+    executeInteractAction(actionData) {
+        const { player, tileComponent, row, col } = actionData;
+        
+        // Get tile type
+        const tileType = tileComponent.type;
+        
+        // Handle interaction based on tile type
+        let interactionResult = 'No effect';
+        let chaosDelta = 0;
+        
+        switch (tileType) {
+            case 'energy':
+                // Energy tiles restore energy
+                const energyRestored = 5;
+                player.addEnergy(energyRestored);
+                interactionResult = `Restored ${energyRestored} energy`;
+                chaosDelta = 0.1; // Interacting with energy increases chaos
+                break;
+                
+            case 'chaotic':
+                // Chaotic tiles increase system chaos when interacted with
+                chaosDelta = 0.3;
+                interactionResult = 'Increased chaos level';
+                break;
+                
+            case 'orderly':
+                // Orderly tiles decrease system chaos when interacted with
+                chaosDelta = -0.3;
+                interactionResult = 'Decreased chaos level';
+                break;
+                
+            case 'flow':
+                // Flow tiles restore movement points
+                const movementRestored = 2;
+                player.addMovementPoints(movementRestored);
+                interactionResult = `Restored ${movementRestored} movement points`;
+                chaosDelta = 0;
+                break;
+                
+            case 'normal':
+                // Normal tiles have a small chaos effect
+                chaosDelta = 0.05;
+                interactionResult = 'Slight chaos increase';
+                break;
+                
+            case 'obstacle':
+                // No effect for obstacles
+                interactionResult = 'Cannot interact with obstacles';
+                chaosDelta = 0;
+                break;
+                
+            default:
+                // No effect for other tile types
+                chaosDelta = 0.05; // Small chaos increase for basic interaction
+                break;
         }
         
-        // Apply visual effect using the renamed method
-        if (typeof tileComponent.applyVisualEffect === 'function') {
-            tileComponent.applyVisualEffect('stabilize-effect');
-        } else if (typeof tileComponent.applyEffect === 'function') {
-            // Backward compatibility for older method name
-            console.warn('ActionPanel: Using deprecated tileComponent.applyEffect method');
-            tileComponent.applyEffect('stabilize-effect');
-        }
+        // Update system balance
+        this.updateSystemBalance(chaosDelta);
         
-        // Mark tile as explored
-        tileComponent.markExplored();
+        // Emit standardized event
+        eventSystem.emitStandardized(
+            EventTypes.ACTION_COMPLETE_INTERACT.legacy,
+            EventTypes.ACTION_COMPLETE_INTERACT.standard,
+            {
+                player: player,
+                tileComponent: tileComponent,
+                row: row,
+                col: col,
+                result: interactionResult,
+                chaosDelta: chaosDelta,
+                timestamp: Date.now(),
+                isStandardized: true
+            }
+        );
         
-        // Check if already fully stabilized
-        if (tileComponent.chaos === 0) {
-            this.showFeedback("Tile is already fully stabilized", 'info', 2000, false, 'action-stabilized');
+        // Show feedback
+        this.showFeedback(`Interacted with ${tileType} tile: ${interactionResult}`, "success", 2000, true, 'action-interact');
+        
+        return true;
+    }
+    
+    /**
+     * Execute a stabilize action
+     * @param {Object} actionData - Data for the action
+     * @param {PlayerComponent} actionData.player - Player component
+     * @param {TileComponent} actionData.tileComponent - Tile component
+     * @param {number} actionData.row - Target row
+     * @param {number} actionData.col - Target column
+     * @param {number} actionData.energyCost - Energy cost
+     * @returns {boolean} True if successful
+     */
+    executeStabilizeAction(actionData) {
+        const { player, tileComponent, row, col } = actionData;
+        
+        // Calculate stabilization effect
+        const currentChaos = tileComponent.chaos;
+        
+        // Skip if chaos is already at minimum
+        if (currentChaos <= 0) {
             return false;
         }
         
-        // Calculate stabilization amount (stronger for players with the trait)
-        let stabilizeAmount = 0.2 + Math.random() * 0.2;
+        // Reduce chaos based on stabilization power
+        // Base reduction is 30% of current chaos
+        let stabilizationPower = 0.3;
         
-        // Check for powerful stabilizer trait with defensive programming
-        const hasPowerfulStabilizer = Array.isArray(playerComponent.traits) && 
-            playerComponent.traits.some(t => t && t.id === 'powerful_stabilizer');
-            
-        if (hasPowerfulStabilizer) {
-            stabilizeAmount *= 1.5;
+        // Apply trait modifiers for stabilization power
+        if (player.traits) {
+            for (const trait of player.traits) {
+                if (trait.stabilizationBonus) {
+                    stabilizationPower += trait.stabilizationBonus;
+                }
+            }
         }
         
-        // Apply stabilization
-        const oldChaos = tileComponent.chaos;
-        const newChaos = Math.max(0, oldChaos - stabilizeAmount);
-        const chaosDelta = newChaos - oldChaos; // This will be negative
+        // Apply stabilization with a minimum reduction of 10%
+        const chaosDelta = -Math.max(currentChaos * stabilizationPower, 0.1);
+        
+        // Update tile chaos
         tileComponent.updateChaosLevel(chaosDelta);
         
-        // Update system-wide balance
+        // Update system balance
         this.updateSystemBalance(chaosDelta);
         
-        // Calculate the reduction percentage
-        const reductionPct = Math.round((oldChaos - newChaos) * 100);
+        // Format percentage for feedback
+        const reductionPercent = Math.round(-chaosDelta * 100);
         
-        // Show feedback with more detail
-        if (hasPowerfulStabilizer) {
-            this.showFeedback(`Stabilized tile with enhanced effect (${reductionPct}%)`, "success", 2000, true, 'action-stabilized');
-        } else {
-            this.showFeedback(`Stabilized tile, reducing chaos by ${reductionPct}%`, "success", 2000, true, 'action-stabilized');
-        }
+        // Emit standardized event
+        eventSystem.emitStandardized(
+            EventTypes.ACTION_COMPLETE_STABILIZE.legacy,
+            EventTypes.ACTION_COMPLETE_STABILIZE.standard,
+            {
+                player: player,
+                tileComponent: tileComponent,
+                row: row,
+                col: col,
+                chaosDelta: chaosDelta,
+                reductionPercent: reductionPercent,
+                timestamp: Date.now(),
+                isStandardized: true
+            }
+        );
         
-        // Emit standardized event only (remove legacy event)
-        eventSystem.emit('action:complete:stabilize', {
-            player: playerComponent,
-            tileComponent: tileComponent,
-            row: row,
-            col: col,
-            oldChaos: oldChaos,
-            newChaos: newChaos,
-            reduction: oldChaos - newChaos
-        });
+        // Show feedback
+        this.showFeedback(`Stabilized tile at (${row}, ${col}): Chaos reduced by ${reductionPercent}%`, "success", 2000, true, 'action-stabilize');
         
         return true;
     }
@@ -810,11 +816,11 @@ export class ActionPanel {
         // Reset action selection in the ActionPanel
         this.currentAction = null;
         
-        // Also ensure the PlayerComponent's action is reset
+        // Only reset the PlayerComponent's action if it's not already null
         const playerEntity = this.entityManager ? this.entityManager.getEntitiesByTag('player')[0] : null;
         if (playerEntity) {
             const playerComponent = playerEntity.getComponent(PlayerComponent);
-            if (playerComponent) {
+            if (playerComponent && playerComponent.currentAction !== null) {
                 playerComponent.setAction(null);
             }
         }
@@ -882,4 +888,4 @@ export class ActionPanel {
         
         console.log("Action panel destroyed successfully");
     }
-} 
+}

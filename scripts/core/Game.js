@@ -12,6 +12,7 @@ import { TurnSystem } from './TurnSystem.js';
 import { entityManager } from './EntityManager.js';
 import { eventSystem } from './EventSystem.js';
 import { Entity } from './Entity.js';
+import { EventTypes } from './EventTypes.js';
 
 export class Game {
     /**
@@ -112,13 +113,17 @@ export class Game {
             
             // Make sure our UI shows the correct balance values
             const balance = this.grid.getSystemBalance();
-            eventSystem.emit('systemBalanceChanged', {
-                chaos: balance.chaos,
-                order: balance.order,
-                systemChaos: balance.chaos,
-                systemOrder: balance.order,
-                chaosDelta: 0
-            });
+            eventSystem.emitStandardized(
+                EventTypes.SYSTEM_BALANCE_CHANGED.legacy,
+                EventTypes.SYSTEM_BALANCE_CHANGED.standard,
+                {
+                    chaos: balance.chaos,
+                    order: balance.order,
+                    systemChaos: balance.chaos,
+                    systemOrder: balance.order,
+                    chaosDelta: 0
+                }
+            );
             
             // Add feedback wrapper element if it doesn't exist yet
             if (!document.getElementById('feedback-message')) {
@@ -744,6 +749,18 @@ export class Game {
                     totalPoints: playerComponent.evolutionPoints
                 });
                 console.log("Explicitly updating UI with reset evolution points");
+                
+                // Explicitly update UI with current player stats
+                // This ensures the UI is updated immediately after game restart
+                if (this.uiManager) {
+                    this.uiManager.updateResourceDisplay('energy', {
+                        energy: playerComponent.energy
+                    });
+                    
+                    this.uiManager.updateResourceDisplay('movement', {
+                        movementPoints: playerComponent.movementPoints
+                    });
+                }
             }
         }
     }
@@ -2295,13 +2312,17 @@ export class Game {
             this.grid.systemChaos = newBalance.chaos;
             this.grid.systemOrder = newBalance.order;
             // Emit the balance change event
-            eventSystem.emit('systemBalanceChanged', {
-                chaos: newBalance.chaos,
-                order: newBalance.order,
-                systemChaos: newBalance.chaos,
-                systemOrder: newBalance.order,
-                chaosDelta: 0
-            });
+            eventSystem.emitStandardized(
+                EventTypes.SYSTEM_BALANCE_CHANGED.legacy,
+                EventTypes.SYSTEM_BALANCE_CHANGED.standard,
+                {
+                    chaos: newBalance.chaos,
+                    order: newBalance.order,
+                    systemChaos: newBalance.chaos,
+                    systemOrder: newBalance.order,
+                    chaosDelta: 0
+                }
+            );
         }
         
         // Restore metrics data if needed
@@ -2337,6 +2358,18 @@ export class Game {
                     // Update UI to reflect no selected action
                     if (window.actionPanel) {
                         window.actionPanel.updateButtonStates();
+                    }
+                    
+                    // Explicitly update UI with current player stats
+                    // This ensures the UI is updated immediately after level transition
+                    if (this.uiManager) {
+                        this.uiManager.updateResourceDisplay('energy', {
+                            energy: playerComponent.energy
+                        });
+                        
+                        this.uiManager.updateResourceDisplay('movement', {
+                            movementPoints: playerComponent.movementPoints
+                        });
                     }
                 }
             } else {

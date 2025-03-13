@@ -14,6 +14,11 @@ import { EventSystem, eventSystem } from './core/EventSystem.js';
 import { Entity, Component, entityManager } from './core/EntityManager.js';
 import { Grid } from './core/Grid.js';
 import { TurnSystem } from './core/TurnSystem.js';
+import { EventTypes } from './core/EventTypes.js';
+
+// Import migration helpers
+import { EventMigrationHelper } from './utils/event-migration-helper.js';
+import { eventSystemMigration } from './tools/event-system-migration.js';
 
 // Make core systems globally available
 window.eventSystem = eventSystem;
@@ -21,6 +26,11 @@ window.entityManager = entityManager;
 window.Entity = Entity;
 window.Grid = Grid;
 window.TurnSystem = TurnSystem;
+window.EventTypes = EventTypes;
+
+// Make migration tools available for development
+window.EventMigrationHelper = EventMigrationHelper;
+window.eventSystemMigration = eventSystemMigration;
 
 // Import components
 import { TileComponent } from './components/TileComponent.js';
