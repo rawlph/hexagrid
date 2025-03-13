@@ -16,7 +16,7 @@ The game uses JavaScript ES6 modules for code organization and dependency manage
 
 - **Export**: Classes and functions are exported using the `export` keyword
 - **Import**: Dependencies are imported using the `import` statement
-- **Global Access**: Some core systems are made globally available through the window object in index.js
+- **Singleton Access**: Core systems are implemented as singletons and exported directly
 
 Example of proper module usage:
 
@@ -26,33 +26,55 @@ export class MetricsSystem {
     // Class implementation
 }
 
+// Exporting a singleton
+export const metricsSystem = new MetricsSystem();
+
 // Importing dependencies
-import { EventSystem } from './EventSystem.js';
-import { EntityManager } from './EntityManager.js';
+import { eventSystem } from './EventSystem.js';
+import { entityManager } from './EntityManager.js';
 ```
 
 ### Module Dependencies
 
-To maintain proper module structure:
+Best practices for maintaining module structure:
 
 1. Each module should explicitly export its public API
 2. Modules should import their dependencies directly
 3. Circular dependencies should be avoided
-4. The index.js file makes core systems globally available when needed
+4. Singletons should be accessible through direct imports
 
-## System Overviews
+## Core Systems
 
 ### Entity Component System
 
 Located in `scripts/core/EntityManager.js`.
 
+- **Entity**: Base class for game objects with component attachment capabilities
+- **Component**: Base class for components that can be attached to entities
 - **EntityManager**: Singleton that tracks all entities, their components, and tags
-- **Entity**: Base class for creating game objects with component attachment capabilities
-- **Components**: Reusable bundles of data and behavior attached to entities
 
-**Key Dependencies**:
-- Most game systems depend on the EntityManager to find and interact with entities
-- Components depend on the Entity class for attachment
+**Key Features**:
+- Entity reference tracking
+- Component registration and retrieval
+- Entity tagging for fast lookups
+- Entity creation and destruction lifecycle management
+
+**Component Lifecycle**:
+```javascript
+// 1. Component creation
+const component = entity.addComponent(PlayerComponent, startRow, startCol);
+
+// 2. Component initialization (called by entity)
+component.init();
+
+// 3. Component updates (called by game loop)
+component.update(deltaTime);
+
+// 4. Component destruction
+entity.removeComponent(PlayerComponent);
+// or
+entity.destroy(); // Removes all components
+```
 
 ### Event System
 
@@ -62,9 +84,29 @@ Located in `scripts/core/EventSystem.js`.
 - Implements a pub/sub (Observer) pattern
 - Prevents event recursion using an event queue
 
-**Key Dependencies**:
-- Almost all systems depend on the EventSystem for communication
-- No other systems are required by the EventSystem (zero dependencies)
+**Key Features**:
+- Event listener registration with context binding
+- Asynchronous event processing to prevent recursion
+- Debug mode for logging events
+- Clean listener removal with registration objects
+
+**Event Processing Flow**:
+```javascript
+// 1. Event is emitted
+eventSystem.emit('eventType', data);
+
+// 2. Event is added to queue with timestamp
+data.timestamp = Date.now();
+eventQueue.push({ eventType, data });
+
+// 3. Queue is processed (if not already processing)
+processEventQueue();
+
+// 4. Listeners are called with data
+listeners[eventType].forEach(listener => {
+    listener.callback.call(listener.context, data);
+});
+```
 
 ### Turn System
 
@@ -74,11 +116,18 @@ Located in `scripts/core/TurnSystem.js`.
 - Handles game stage progression
 - Calculates and awards evolution points based on the chaos/order balance
 
-**Key Dependencies**:
-- Depends on EventSystem for emitting turn events
-- Depends on EntityManager to find the player entity
-- Depends on PlayerComponent for awarding evolution points
-- Game.js depends on TurnSystem for turn management
+**Key Responsibilities**:
+- Turn start/end management
+- Game victory/defeat conditions
+- Evolution point calculations
+- Level completion logic
+
+**Turn Flow**:
+1. Player takes actions during their turn
+2. Player ends their turn (manually or automatically)
+3. TurnSystem processes end-of-turn effects
+4. Evolution points are awarded based on system balance
+5. New turn begins with resource replenishment
 
 ### Grid System
 
@@ -88,11 +137,16 @@ Located in `scripts/core/Grid.js`.
 - Creates tile entities for each hex cell
 - Tracks and updates the chaos/order balance of the entire system
 
-**Key Dependencies**:
-- Depends on EntityManager for creating and tracking tile entities
-- Depends on EventSystem for broadcasting grid events
-- Depends on TileComponent for tile behavior
-- Game.js depends on Grid for world representation
+**Key Responsibilities**:
+- Grid initialization and tile entity creation
+- Hex coordinate system and adjacency calculations
+- System balance tracking and updates
+- Tile interaction handling
+
+**Coordinate System**:
+- Uses a row-column coordinate system for the hexagonal grid
+- Provides utilities for calculating adjacent positions
+- Handles hex grid rendering and positioning
 
 ### Game Controller
 
@@ -102,12 +156,15 @@ Located in `scripts/core/Game.js`.
 - Manages the overall game state and lifecycle
 - Handles UI updates and user input
 
-**Key Dependencies**:
-- Depends on all core systems (EntityManager, EventSystem, Grid, TurnSystem)
-- Depends on PlayerComponent and TileComponent for entity creation
-- Depends on DOM elements for UI updates
+**Initialization Process**:
+1. Create and initialize all systems
+2. Set up the grid and create entities
+3. Register event listeners
+4. Create the player entity
+5. Initialize the UI components
+6. Start the game loop
 
-## Component Overviews
+## Key Components
 
 ### Player Component
 
@@ -118,36 +175,72 @@ Located in `scripts/components/PlayerComponent.js`.
 - Stores evolution points and traits
 - Calculates action costs with trait modifiers
 
-**Key Dependencies**:
-- Depends on EventSystem for broadcasting player events
-- Depends on TileComponent for interaction with tiles
-- Depends on EntityManager for finding tile entities
+**Key Responsibilities**:
+- Player movement and positioning
+- Resource management (energy, movement points)
+- Action execution and cost calculation
+- Trait storage and application
+- Evolution point accumulation
 
-**Key Methods**:
+**Resource Management**:
 ```javascript
-// Calculate action cost with trait modifiers
-getActionCost(action, targetRow, targetCol) {
-    // Get target tile
-    const tileEntity = entityManager.getEntitiesByTag(`tile_${targetRow}_${targetCol}`)[0];
-    if (!tileEntity) return -1;
+// Energy usage for actions
+useEnergy(amount) {
+    // Check if we have enough energy
+    if (this.energy < amount) return false;
     
-    const tileComponent = tileEntity.getComponent(TileComponent);
-    if (!tileComponent) return -1;
+    // Store old energy value
+    const oldEnergy = this.energy;
     
-    // Get base cost from tile
-    let cost = tileComponent.getActionCost(action);
+    // Deduct energy
+    this.energy = Math.max(0, this.energy - amount);
     
-    // Apply trait modifiers
-    for (const trait of this.traits) {
-        if (trait.modifiesActionCost && typeof trait.modifiesActionCost === 'function') {
-            cost = trait.modifiesActionCost(action, cost, tileComponent);
-        }
-    }
+    // Emit energy changed event
+    eventSystem.emit('playerEnergyChanged', {
+        player: this,
+        oldEnergy: oldEnergy,
+        energy: this.energy,
+        delta: this.energy - oldEnergy
+    });
     
-    return Math.max(0, cost);
+    return true;
 }
+```
 
-// Add a trait to the player
+### Tile Component
+
+Located in `scripts/components/TileComponent.js`.
+
+- **TileComponent**: Manages tile properties, behavior, and appearance
+- Different tile types have different effects on gameplay
+- Tracks individual tile chaos/order values
+
+**Key Responsibilities**:
+- Tile type definition (energy, chaos, order, flow)
+- Action cost calculations for different actions
+- Tile appearance and visual updates
+- Tile interaction handling
+
+## Game Systems
+
+### Evolution System
+
+Located in `scripts/systems/EvolutionSystem.js`.
+
+- **EvolutionSystem**: Manages player evolution, traits, and abilities
+- Defines available traits and their effects
+- Handles trait acquisition and application
+
+**Trait Categories**:
+- Movement: Traits that enhance movement capabilities
+- Sensing: Traits that improve sensing ability
+- Interaction: Traits that enhance interaction ability
+- Stabilization: Traits that improve stabilization ability
+- Special: Unique traits with special effects
+
+**Trait Application**:
+```javascript
+// Add trait to player
 addTrait(trait) {
     // Check if we already have this trait
     if (this.traits.some(t => t.id === trait.id)) return false;
@@ -168,52 +261,6 @@ addTrait(trait) {
 }
 ```
 
-### Tile Component
-
-Located in `scripts/components/TileComponent.js`.
-
-- **TileComponent**: Manages tile properties, behavior, and appearance
-- Different tile types have different effects on gameplay
-- Tracks individual tile chaos/order values
-
-**Key Dependencies**:
-- Depends on EventSystem for broadcasting tile events
-
-## System Implementations
-
-### Evolution System
-
-Located in `scripts/systems/EvolutionSystem.js`.
-
-- **EvolutionSystem**: Manages player evolution, traits, and abilities
-- Defines available traits and their effects
-- Handles trait acquisition and application
-
-**Key Dependencies**:
-- Depends on EventSystem for handling evolution events
-- Depends on MetricsSystem for calculating evolution points
-- Depends on EntityManager for accessing player entity
-
-**Key Methods**:
-```javascript
-// Get traits by category
-getTraitsByCategory(category) {
-    if (this.availableTraits[category]) {
-        return this.availableTraits[category];
-    }
-    return [];
-}
-
-// Check if a trait can be purchased
-canPurchaseTrait(traitId, evolutionPoints) {
-    const trait = this.getTraitById(traitId);
-    if (!trait) return false;
-    
-    // Check if we have enough points
-    return evolutionPoints >= trait.cost;
-}
-```
-
 ### Metrics System
 
 Located in `scripts/systems/MetricsSystem.js`.
@@ -222,9 +269,12 @@ Located in `scripts/systems/MetricsSystem.js`.
 - Calculates statistics for level completion
 - Determines player play style based on actions
 
-**Key Dependencies**:
-- Depends on EntityManager for accessing player entity
-- Depends on EventSystem for tracking game events
+**Key Metrics**:
+- Actions performed (by type)
+- Movement patterns
+- System balance influence
+- Evolution point accumulation
+- Time to complete objectives
 
 ## UI Systems
 
@@ -233,37 +283,55 @@ Located in `scripts/systems/MetricsSystem.js`.
 Located in `scripts/ui/ActionPanel.js`.
 
 - **ActionPanel**: Manages the action buttons and their behavior
-- **Key Responsibilities**:
-  - Handles action button interactions
-  - Executes actions when tiles are clicked
-  - Updates button states based on game state
-  - Manages action feedback to the player
-- **Global Access**: Made available via `window.actionPanel` for delegation from Game
+- Handles action button interactions
+- Executes actions when tiles are clicked
+- Updates button states based on game state
 
-**Key Dependencies**:
-- Depends on EventSystem for handling game events
-- Depends on Game instance for system-wide balance updates
-- Depends on PlayerComponent for checking action availability
-- Depends on TileComponent for interacting with tiles
+**Key Responsibilities**:
+- Action button rendering and state management
+- Action execution logic
+- Action cost display and validation
+- User feedback for actions
+
+**Action Flow**:
+1. Player selects an action from the action panel
+2. ActionPanel updates button states and current action
+3. Player clicks a tile on the grid
+4. ActionPanel validates and executes the action
+5. Action results are processed and displayed
 
 ### UI Manager
 
 Located in `scripts/ui/UIManager.js`.
 
 - **UIManager**: Coordinates UI updates across the game
-- **Key Responsibilities**:
-  - Initializes ActionPanel and MessageSystem components
-  - Makes ActionPanel globally accessible via window.actionPanel
-  - Manages modal windows and overlays
-  - Handles UI animations and transitions
+- Initializes ActionPanel and MessageSystem components
+- Manages modal windows and overlays
+- Handles UI animations and transitions
 
-**Key Dependencies**:
-- Depends on EventSystem for responding to game events
-- Depends on ActionPanel for handling player actions
-- Depends on MessageSystem for player feedback
-- Depends on DOM elements for UI manipulation
+**Key Responsibilities**:
+- Screen transitions and modal management
+- UI element creation and positioning
+- Integration of various UI components
+- User input handling for UI elements
 
-## Dependency Flow Diagram
+### Message System
+
+Located in `scripts/ui/MessageSystem.js`.
+
+- **MessageSystem**: Manages game messages and notifications
+- Provides feedback for player actions
+- Shows tutorial and hint messages
+- Displays system notifications
+
+**Message Types**:
+- Info: General information messages
+- Success: Positive feedback messages
+- Warning: Cautionary messages
+- Error: Critical error messages
+- Tutorial: Help and guidance messages
+
+## Dependency Flow
 
 ```
 ┌─────────────┐         ┌─────────────┐
@@ -311,58 +379,29 @@ Located in `scripts/ui/UIManager.js`.
 
 ## Event Flow Examples
 
-### Player Action Flow:
-1. Player selects an action button
-2. ActionPanel.handleActionButtonClick is called
-3. PlayerComponent.setAction is called to update the current action
-4. ActionPanel updates button UI states
-5. Player clicks a tile
-6. Grid emits 'tileClicked' event
-7. Game.handleTileClick and ActionPanel.handleTileClick both receive the event
-8. Game delegates to ActionPanel if it's available
-9. ActionPanel verifies if the action is valid
-10. ActionPanel executes the action via the appropriate method
-11. Action effects are applied and feedback is shown to the player
+### Player Movement Flow:
 
-### Delegation Pattern Implementation:
-1. UIManager creates an ActionPanel instance
-2. UIManager sets window.actionPanel to make it globally accessible
-3. When a tile is clicked, Game.handleTileClick checks for window.actionPanel
-4. If available, Game delegates action handling to ActionPanel
-5. If not available, Game falls back to direct action handling
-6. This ensures consistent behavior while maintaining backward compatibility
+1. Player selects "Move" action in ActionPanel
+2. ActionPanel calls playerComponent.setAction('move')
+3. Player clicks a tile on the grid
+4. Grid.handleTileClick fires the 'tileClicked' event
+5. ActionPanel handles the 'tileClicked' event
+6. ActionPanel validates the move action with playerComponent.getActionCost
+7. ActionPanel calls playerComponent.updatePosition(row, col)
+8. PlayerComponent updates its position and emits 'playerMoved' event
+9. Various systems react to the 'playerMoved' event
 
 ### Turn End Flow:
+
 1. Player clicks "End Turn" button
-2. Game.endTurn() is called
+2. ActionPanel triggers Game.endTurn()
 3. Game forwards the call to TurnSystem.endTurn()
-4. TurnSystem calculates and awards evolution points
-5. TurnSystem emits 'turnEnd' event
-6. TurnSystem increments turn counter
-7. TurnSystem emits 'turnStart' event for the new turn
-8. Various systems react to these events
-
-### Player Movement Flow:
-1. Player selects "Move" action
-2. Player clicks a tile
-3. Game.handleTileClick() is called
-4. Game checks if the action is valid
-5. PlayerComponent.updatePosition() is called
-6. PlayerComponent emits 'playerMoved' event
-7. Grid updates the player's position
-8. UI updates to reflect the new position
-
-### Trait Acquisition Flow:
-1. Player clicks "Evolve" button
-2. Game.showEvolutionScreen() is called
-3. Evolution screen displays available traits
-4. Player selects a trait to unlock
-5. Game.unlockTrait() is called
-6. PlayerComponent.addTrait() adds the trait to the player
-7. PlayerComponent.applyTraitEffects() applies the trait's effects
-8. PlayerComponent emits 'playerTraitAdded' event
-9. Evolution points are deducted
-10. UI updates to reflect the new trait and points
+4. TurnSystem emits 'turnEnd' event
+5. PlayerComponent handles the 'turnEnd' event (clears current action)
+6. TurnSystem calculates and awards evolution points
+7. TurnSystem increments turn counter
+8. TurnSystem emits 'turnStart' event
+9. PlayerComponent handles 'turnStart' (replenishes energy/movement)
 
 ## Resource Management
 
@@ -388,67 +427,102 @@ Located in `scripts/ui/UIManager.js`.
 | File | Direct Dependencies |
 |------|---------------------|
 | scripts/index.js | EventSystem, EntityManager, Grid, TurnSystem, TileComponent, PlayerComponent, Game, MetricsSystem, EvolutionSystem, UIManager |
-| scripts/core/Game.js | EventSystem, EntityManager, Grid, TurnSystem, PlayerComponent, TileComponent, EvolutionSystem |
+| scripts/core/Game.js | EventSystem, EntityManager, Grid, TurnSystem, PlayerComponent, TileComponent, EvolutionSystem, UIManager, MetricsSystem |
 | scripts/core/Grid.js | EventSystem, EntityManager, TileComponent |
 | scripts/core/TurnSystem.js | EventSystem, EntityManager, PlayerComponent |
 | scripts/core/EntityManager.js | (None) |
 | scripts/core/EventSystem.js | (None) |
 | scripts/components/PlayerComponent.js | EventSystem, EntityManager, TileComponent |
-| scripts/components/TileComponent.js | EventSystem |
-| scripts/systems/EvolutionSystem.js | EventSystem, EntityManager, MetricsSystem |
-| scripts/systems/MetricsSystem.js | EntityManager |
+| scripts/components/TileComponent.js | EventSystem, Component |
+| scripts/systems/EvolutionSystem.js | EventSystem, EntityManager, PlayerComponent |
+| scripts/systems/MetricsSystem.js | EventSystem, EntityManager, PlayerComponent |
 | scripts/ui/ActionPanel.js | EventSystem, PlayerComponent, TileComponent, EntityManager |
-| scripts/ui/UIManager.js | EventSystem |
+| scripts/ui/UIManager.js | EventSystem, ActionPanel, MessageSystem |
+| scripts/ui/MessageSystem.js | EventSystem |
 
 ## Common Pitfalls and Best Practices
 
-1. **Circular Dependencies**: Be careful not to create circular dependencies between modules
-2. **Event Handling**: Always clean up event listeners when components are destroyed
-3. **Component Access**: Use entityManager.getEntitiesByTag() and entity.getComponent() properly
-4. **State Management**: State changes should be communicated via events for proper decoupling
-5. **DOM Manipulation**: DOM updates should be handled by dedicated UI components only
-6. **Module Exports**: Always export classes and functions that need to be used by other modules
-7. **Action Cost Calculation**: Use PlayerComponent.getActionCost() for accurate action costs that include trait modifiers
-8. **UI Delegation Pattern**: Use the delegation pattern for UI interactions to keep Game.js focused on game logic rather than UI details
-9. **Global References**: Clean up global references in the destroy methods to prevent memory leaks
+1. **Event Listener Cleanup**: Always clean up event listeners in the destroy method of components and systems
+   ```javascript
+   destroy() {
+       // Clean up event listeners
+       for (const registration of this._registeredEvents) {
+           eventSystem.off(registration);
+       }
+   }
+   ```
 
-## Common Issues and Troubleshooting
+2. **Component Access**: Use proper methods for component access
+   ```javascript
+   // Good - Type-safe and clear
+   const playerComponent = entity.getComponent(PlayerComponent);
+   
+   // Avoid - String-based lookup is error-prone
+   const playerComponent = entity.components.get('PlayerComponent');
+   ```
 
-1. **"X is not defined" Errors**: 
-   - Ensure the class or function is properly exported from its source file
-   - Check that it's correctly imported where it's used
-   - For global access, verify it's added to the window object in index.js
+3. **Entity Lifecycle**: Properly manage entity creation and destruction
+   ```javascript
+   // Create an entity
+   const entity = new Entity();
+   entityManager.addEntity(entity);
+   
+   // Add components
+   entity.addComponent(TileComponent, row, col);
+   
+   // Destroy an entity (triggers component.destroy() for all components)
+   entityManager.removeEntity(entity);
+   ```
 
-2. **Action Cost Errors**:
-   - If you encounter "TypeError: playerComponent.getActionCost is not defined", ensure the method is implemented in PlayerComponent
-   - Check that necessary imports (TileComponent, entityManager) are present
-   - Verify the method signature matches what's expected by calling code
+4. **Event Communication**: Use events for cross-system communication rather than direct references
+   ```javascript
+   // Good - Event-based communication
+   eventSystem.emit('playerMoved', { player: this, row, col });
+   
+   // Avoid - Direct system references
+   gameInstance.grid.updatePlayerPosition(this, row, col);
+   ```
 
-3. **Trait Effects Not Applied**:
-   - Ensure traits are properly saved and loaded between levels
-   - Check that trait.onAcquire and trait.modifiesActionCost functions are defined correctly
-   - Verify that PlayerComponent.applyAllTraitEffects() is called when loading a saved game
+5. **State Management**: Manage state changes through proper methods and emit events for changes
+   ```javascript
+   // Good - Method with validation and event emission
+   useEnergy(amount) {
+       if (this.energy < amount) return false;
+       const oldEnergy = this.energy;
+       this.energy -= amount;
+       eventSystem.emit('playerEnergyChanged', { player: this, oldEnergy, energy: this.energy });
+       return true;
+   }
+   
+   // Avoid - Direct property modification
+   this.energy -= amount;
+   ```
 
-4. **Action Execution Issues**:
-   - Ensure window.actionPanel is set correctly when initializing UIManager
-   - Verify that systems are properly connected for balance updates
-   - Check that actions are consistently defined in both Game and ActionPanel for fallback scenarios
+6. **Error Handling**: Use try-catch blocks for error-prone operations
+   ```javascript
+   try {
+       const component = entity.addComponent(PlayerComponent);
+       component.init();
+   } catch (error) {
+       console.error('Failed to create player component:', error);
+       // Handle the error appropriately
+   }
+   ```
 
-## Extending the Game
+## LLM Context Optimization
 
-When adding new features:
+For LLM agents working with this codebase, focus on these key architectural principles:
 
-1. **New Components**: Add new capabilities to entities
-2. **New Events**: Define clear event types for communication
-3. **New UI Elements**: Follow the existing pattern of DOM manipulation
-4. **New Systems**: Integrate with existing systems through the event system
-5. **New Modules**: Ensure proper export/import and avoid circular dependencies
-6. **User Interface Extensions**: 
-   - Extend ActionPanel for additional action types
-   - Follow the delegation pattern for new UI components
-   - Ensure global references are properly cleaned up
+1. **Entity-Component Pattern**: Game objects are entities with attached components
+2. **Event-Driven Communication**: Systems communicate via events, not direct references
+3. **Singleton Core Systems**: Core systems are implemented as singletons
+4. **Resource Management**: Player resources are managed through PlayerComponent
+5. **Action Flow**: Player actions follow a select-action → click-tile → execute pattern
+6. **Event Standardization**: Events follow a category:action:subject naming pattern
 
-For major architectural changes, consider:
-1. How it affects the existing entity-component structure
-2. How events will flow through the new systems
-3. Whether it maintains proper separation of concerns 
+When modifying code, ensure:
+1. Components properly register and clean up event listeners
+2. State changes emit appropriate events for other systems
+3. New functionality follows the established architectural patterns
+4. Systems don't bypass the event system for cross-system communication
+5. Entity and component lifecycles are properly managed 
