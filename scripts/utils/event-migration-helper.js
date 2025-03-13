@@ -446,30 +446,100 @@ export class EventMigrationHelper {
     }
     
     /**
-     * Migrate ready events - stop emitting legacy events for fully migrated ones
-     * @returns {Array} Array of migrated event names
+     * Run a complete migration assessment and mark events as fully migrated
+     * This will identify events that are ready for full migration (no more legacy emissions)
+     * and mark them in the EventSystem to disable legacy emissions
+     * @param {boolean} autoDisable - Whether to automatically disable legacy emissions for fully migrated events
+     * @returns {Object} Results of the migration assessment
      */
-    static migrateReadyEvents() {
-        const readyEvents = this.identifyMigrationReadyEvents();
+    static runFinalMigrationPhase(autoDisable = false) {
+        console.group('Final Migration Phase Assessment');
         
-        if (readyEvents.length === 0) {
-            console.log('No events are ready for full migration');
-            return [];
+        // Get all migration stats
+        const stats = eventSystem.getMigrationStats();
+        
+        // Prepare results
+        const results = {
+            fullyMigrated: [],
+            readyForMigration: [],
+            notReadyForMigration: [],
+            noStandardEquivalent: []
+        };
+        
+        // Check each legacy event
+        for (const legacyEvent in stats.legacyEventUsage) {
+            const standardEvent = getStandardName(legacyEvent);
+            
+            // Skip events that are already marked as fully migrated
+            if (stats.fullyMigratedEvents.includes(legacyEvent)) {
+                results.fullyMigrated.push({
+                    legacy: legacyEvent,
+                    standard: standardEvent
+                });
+                continue;
+            }
+            
+            // Check if this event has a standard equivalent
+            if (!standardEvent) {
+                results.noStandardEquivalent.push(legacyEvent);
+                continue;
+            }
+            
+            // Get listener counts
+            const legacyListeners = stats.listenerStatistics.legacyListeners[legacyEvent] || 0;
+            const standardListeners = stats.listenerStatistics.standardListeners[standardEvent] || 0;
+            
+            // Check if this event is ready for migration
+            if (legacyListeners === 0 && standardListeners > 0) {
+                results.readyForMigration.push({
+                    legacy: legacyEvent,
+                    standard: standardEvent,
+                    legacyUsage: stats.legacyEventUsage[legacyEvent],
+                    standardUsage: stats.standardizedEventUsage[standardEvent]
+                });
+                
+                // If auto-disable is enabled, mark this event as fully migrated
+                if (autoDisable) {
+                    console.log(`🟢 Marking event '${legacyEvent}' as fully migrated`);
+                    eventSystem.markEventAsMigrated(legacyEvent);
+                }
+            } else {
+                results.notReadyForMigration.push({
+                    legacy: legacyEvent,
+                    standard: standardEvent,
+                    legacyListeners,
+                    standardListeners,
+                    reason: legacyListeners > 0 ? "Still has legacy listeners" : "No standard listeners"
+                });
+            }
         }
         
-        console.group('Migrating Ready Events');
-        const migrated = [];
+        // Log results
+        console.log(`Events fully migrated: ${results.fullyMigrated.length}`);
+        console.log(`Events ready for migration: ${results.readyForMigration.length}`);
+        console.log(`Events not ready for migration: ${results.notReadyForMigration.length}`);
+        console.log(`Events without standard equivalent: ${results.noStandardEquivalent.length}`);
         
-        readyEvents.forEach(event => {
-            eventSystem.markEventAsMigrated(event.legacyName);
-            migrated.push(event.legacyName);
-            console.log(`✅ Migrated: ${event.legacyName} → ${event.standardName}`);
-        });
+        if (results.readyForMigration.length > 0) {
+            console.log("Events ready for migration:");
+            results.readyForMigration.forEach(event => {
+                console.log(`  - ${event.legacy} → ${event.standard}`);
+            });
+        }
         
-        console.log(`Successfully migrated ${migrated.length} events`);
         console.groupEnd();
         
-        return migrated;
+        return results;
+    }
+    
+    /**
+     * Mark all events ready for migration as fully migrated
+     * This will disable legacy event emissions for these events
+     * @returns {Array} List of events that were marked as fully migrated
+     */
+    static migrateReadyEvents() {
+        const results = this.runFinalMigrationPhase(true);
+        return results.readyForMigration;
     }
     
     /**

@@ -165,11 +165,16 @@ export class Game {
             this.isInitialized = true;
             
             // Emit game initialized event
-            this.eventSystem.emit('gameInitialized', {
-                rows,
-                cols,
-                gameStage
-            });
+            this.eventSystem.emitStandardized(
+                EventTypes.GAME_INITIALIZED.legacy,
+                EventTypes.GAME_INITIALIZED.standard,
+                {
+                    rows,
+                    cols,
+                    gameStage,
+                    isStandardized: true
+                }
+            );
             
             return true;
         } catch (error) {
@@ -741,13 +746,18 @@ export class Game {
             const playerComponent = playerEntity.getComponent(PlayerComponent);
             if (playerComponent) {
                 // Explicitly emit event to update UI with reset evolution points
-                this.eventSystem.emit('playerEvolutionPointsChanged', {
-                    player: playerComponent,
-                    chaosPoints: playerComponent.chaosEvolutionPoints,
-                    flowPoints: playerComponent.flowEvolutionPoints,
-                    orderPoints: playerComponent.orderEvolutionPoints,
-                    totalPoints: playerComponent.evolutionPoints
-                });
+                this.eventSystem.emitStandardized(
+                    EventTypes.PLAYER_EVOLUTION_POINTS_CHANGED.legacy,
+                    EventTypes.PLAYER_EVOLUTION_POINTS_CHANGED.standard,
+                    {
+                        player: playerComponent,
+                        chaosPoints: playerComponent.chaosEvolutionPoints,
+                        flowPoints: playerComponent.flowEvolutionPoints,
+                        orderPoints: playerComponent.orderEvolutionPoints,
+                        totalPoints: playerComponent.evolutionPoints,
+                        isStandardized: true
+                    }
+                );
                 console.log("Explicitly updating UI with reset evolution points");
                 
                 // Explicitly update UI with current player stats
@@ -1977,12 +1987,18 @@ export class Game {
         this.addLogMessage(`You acquired the ${trait.name} trait!`);
         
         // Emit point change event to update all UI elements
-        this.eventSystem.emit('playerEvolutionPointsChanged', {
-            chaosPoints: playerComponent.chaosEvolutionPoints,
-            flowPoints: playerComponent.flowEvolutionPoints,
-            orderPoints: playerComponent.orderEvolutionPoints,
-            totalPoints: playerComponent.evolutionPoints
-        });
+        this.eventSystem.emitStandardized(
+            EventTypes.PLAYER_EVOLUTION_POINTS_CHANGED.legacy,
+            EventTypes.PLAYER_EVOLUTION_POINTS_CHANGED.standard,
+            {
+                player: playerComponent,
+                chaosPoints: playerComponent.chaosEvolutionPoints,
+                flowPoints: playerComponent.flowEvolutionPoints,
+                orderPoints: playerComponent.orderEvolutionPoints,
+                totalPoints: playerComponent.evolutionPoints,
+                isStandardized: true
+            }
+        );
         
         // Return success
         return true;
@@ -2070,12 +2086,18 @@ export class Game {
         if (orderPoints) orderPoints.textContent = data.orderPoints;
         
         // Emit unified event for both evolution screen and game-info display updates
-        this.eventSystem.emit('playerEvolutionPointsChanged', {
-            chaosPoints: data.chaosPoints,
-            flowPoints: data.flowPoints,
-            orderPoints: data.orderPoints,
-            totalPoints: data.chaosPoints + data.flowPoints + data.orderPoints
-        });
+        this.eventSystem.emitStandardized(
+            EventTypes.PLAYER_EVOLUTION_POINTS_CHANGED.legacy,
+            EventTypes.PLAYER_EVOLUTION_POINTS_CHANGED.standard,
+            {
+                player: playerComponent,
+                chaosPoints: data.chaosPoints,
+                flowPoints: data.flowPoints,
+                orderPoints: data.orderPoints,
+                totalPoints: data.chaosPoints + data.flowPoints + data.orderPoints,
+                isStandardized: true
+            }
+        );
         
         // Also refresh the trait list to update unlockable status for all traits
         // Get the current active category
@@ -2463,12 +2485,18 @@ export class Game {
             playerComponent.evolutionPoints = playerData.evolutionPoints.total || 0;
             
             // Emit event to update UI
-            this.eventSystem.emit('playerEvolutionPointsChanged', {
-                chaosPoints: playerComponent.chaosEvolutionPoints,
-                flowPoints: playerComponent.flowEvolutionPoints,
-                orderPoints: playerComponent.orderEvolutionPoints,
-                totalPoints: playerComponent.evolutionPoints
-            });
+            this.eventSystem.emitStandardized(
+                EventTypes.PLAYER_EVOLUTION_POINTS_CHANGED.legacy,
+                EventTypes.PLAYER_EVOLUTION_POINTS_CHANGED.standard,
+                {
+                    player: playerComponent,
+                    chaosPoints: playerComponent.chaosEvolutionPoints,
+                    flowPoints: playerComponent.flowEvolutionPoints,
+                    orderPoints: playerComponent.orderEvolutionPoints,
+                    totalPoints: playerComponent.evolutionPoints,
+                    isStandardized: true
+                }
+            );
             
             console.log(`Restored evolution points: ${playerComponent.evolutionPoints} total`);
         }
@@ -2590,5 +2618,21 @@ export class Game {
             console.error("Failed to create entities:", error);
             return false;
         }
+    }
+    
+    /**
+     * Update evolution points UI
+     * @param {Object} data - Evolution points data
+     */
+    updateEvolutionPointsUI(data) {
+        // Use standardized event emission
+        this.eventSystem.emitStandardized(
+            EventTypes.PLAYER_EVOLUTION_POINTS_CHANGED.legacy,
+            EventTypes.PLAYER_EVOLUTION_POINTS_CHANGED.standard,
+            {
+                ...data,
+                isStandardized: true
+            }
+        );
     }
 } 

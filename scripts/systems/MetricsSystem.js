@@ -2,6 +2,7 @@
  * Tracks player metrics and achievements throughout the game
  */
 import { eventSystem } from '../core/EventSystem.js';
+import { EventTypes } from '../core/EventTypes.js';
 
 export class MetricsSystem {
     constructor() {
@@ -363,7 +364,14 @@ export class MetricsSystem {
         localStorage.setItem('levelMetrics', JSON.stringify(savedMetrics));
         
         // Also emit an event
-        eventSystem.emit('levelMetricsSaved', { metrics });
+        eventSystem.emitStandardized(
+            EventTypes.LEVEL_METRICS_SAVED.legacy,
+            EventTypes.LEVEL_METRICS_SAVED.standard,
+            { 
+                metrics,
+                isStandardized: true 
+            }
+        );
     }
     
     /**
@@ -396,7 +404,14 @@ export class MetricsSystem {
         
         // Emit event for newly completed achievements
         if (newlyCompleted.length > 0) {
-            eventSystem.emit('achievementsCompleted', { achievements: newlyCompleted });
+            eventSystem.emitStandardized(
+                EventTypes.ACHIEVEMENTS_COMPLETED.legacy,
+                EventTypes.ACHIEVEMENTS_COMPLETED.standard,
+                { 
+                    achievements: newlyCompleted,
+                    isStandardized: true 
+                }
+            );
         }
     }
     
@@ -449,52 +464,40 @@ export class MetricsSystem {
      * Reset all metrics
      */
     reset() {
-        // Reset all metrics except level completion count
-        const levelsCompleted = this.levelsCompleted;
+        console.log('Resetting metrics system');
         
-        // Movement metrics
+        // Reset all counters
         this.movesMade = 0;
         this.tilesExplored = 0;
-        this.totalDistanceMoved = 0;
-        
-        // Resource metrics
-        this.energyUsed = 0;
-        this.energyGained = 0;
-        this.movementPointsUsed = 0;
-        
-        // Action metrics
         this.sensesPerformed = 0;
         this.interactionsPerformed = 0;
         this.stabilizationsPerformed = 0;
-        
-        // Chaos/Order metrics
         this.chaosCreated = 0;
         this.chaosReduced = 0;
         this.netChaosChange = 0;
-        
-        // Evolution metrics (don't reset these between levels)
-        // this.evolutionPointsEarned = 0;
-        // this.traitsAcquired = 0;
-        
-        // Turn metrics
-        this.turnsTaken = 0;
-        this.averageActionsPerTurn = 0;
-        
-        // Game completion metrics
-        this.levelsCompleted = levelsCompleted; // Restore levels completed
+        this.completedLevels = 0;
+        this.evolutionPointsEarned = {
+            chaos: 0,
+            flow: 0,
+            order: 0,
+            total: 0
+        };
+        this.traitsAcquired = 0;
+        this.currentGameStage = 'early';
+        this.levelStartTime = Date.now();
         this.totalPlayTime = 0;
-        this.gameStartTime = Date.now();
         
-        // Play style metrics
-        this.explorerRating = 0;
-        this.balancerRating = 0;
-        this.efficientRating = 0;
-        
-        // Re-initialize achievements
+        // Reset achievements
         this.initAchievements();
         
-        // Emit event
-        eventSystem.emit('metricsReset');
+        // Emit reset event
+        eventSystem.emitStandardized(
+            EventTypes.METRICS_RESET.legacy,
+            EventTypes.METRICS_RESET.standard,
+            {
+                isStandardized: true
+            }
+        );
     }
     
     /**

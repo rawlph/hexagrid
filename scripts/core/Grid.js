@@ -70,11 +70,16 @@ export class Grid {
             window.addEventListener('resize', this.handleResize);
             
             // Emit grid initialized event
-            eventSystem.emit('gridInitialized', {
-                rows: this.rows,
-                cols: this.cols,
-                gameStage: this.gameStage
-            });
+            eventSystem.emitStandardized(
+                EventTypes.GRID_INITIALIZED.legacy,
+                EventTypes.GRID_INITIALIZED.standard,
+                {
+                    rows: this.rows,
+                    cols: this.cols,
+                    gameStage: this.gameStage,
+                    isStandardized: true
+                }
+            );
             
             // Emit the initial balance state
             eventSystem.emitStandardized(
@@ -208,12 +213,17 @@ export class Grid {
         }
         
         // Emit grid initialized event
-        eventSystem.emit('gridInitialized', {
-            rows: this.rows,
-            cols: this.cols,
-            width: totalWidth,
-            height: totalHeight
-        });
+        eventSystem.emitStandardized(
+            EventTypes.GRID_INITIALIZED.legacy,
+            EventTypes.GRID_INITIALIZED.standard,
+            {
+                rows: this.rows,
+                cols: this.cols,
+                width: totalWidth,
+                height: totalHeight,
+                isStandardized: true
+            }
+        );
     }
     
     /**

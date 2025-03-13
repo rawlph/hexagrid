@@ -1,4 +1,14 @@
 /**
+ * Player entity for Hexgrid Evolution
+ * Represents the player character in the game
+ */
+import { eventSystem } from '../core/EventSystem.js';
+import { Entity } from '../core/EntityManager.js';
+import { TileComponent } from '../components/TileComponent.js';
+import { EventTypes } from '../core/EventTypes.js';
+import { EntityComponentSystem } from '../core/EntityComponentSystem.js';
+
+/**
  * Represents the player character
  */
 class PlayerComponent extends Component {
@@ -107,66 +117,33 @@ class PlayerComponent extends Component {
     
     /**
      * Move the player to a new tile
-     * @param {number} newRow - The target row
-     * @param {number} newCol - The target column
+     * @param {number} row - The target row
+     * @param {number} col - The target column
+     * @param {EntityComponentSystem} eventSystem - The event system to emit events
      * @returns {boolean} True if move was successful
      */
-    moveTo(newRow, newCol) {
-        console.log(`Moving player from (${this.row}, ${this.col}) to (${newRow}, ${newCol})`);
+    moveTo(row, col, eventSystem) {
+        const oldRow = this.row;
+        const oldCol = this.col;
         
-        // Get target tile entity
-        const targetTileEntities = entityManager.getEntitiesByTag(`tile_${newRow}_${newCol}`);
-        if (!targetTileEntities.length) {
-            console.error(`No tile entity found at (${newRow}, ${newCol})`);
-            return false;
+        this.row = row;
+        this.col = col;
+        
+        // Emit moved event if we have an event system
+        if (eventSystem) {
+            eventSystem.emitStandardized(
+                EventTypes.PLAYER_MOVED.legacy, 
+                EventTypes.PLAYER_MOVED.standard,
+                {
+                    oldRow,
+                    oldCol,
+                    newRow: row,
+                    newCol: col,
+                    entity: this,
+                    isStandardized: true
+                }
+            );
         }
-        
-        const targetTileEntity = targetTileEntities[0];
-        const targetTileComponent = targetTileEntity.getComponent(TileComponent);
-        
-        if (!targetTileComponent) {
-            console.error("Target tile has no TileComponent");
-            return false;
-        }
-        
-        // Check if tile is movable
-        if (targetTileComponent.type === 'water' || targetTileComponent.type === 'blocked') {
-            console.error(`Cannot move to ${targetTileComponent.type} tile`);
-            return false;
-        }
-        
-        // Remove character token from current tile
-        if (this.characterToken && this.characterToken.parentNode) {
-            this.characterToken.parentNode.removeChild(this.characterToken);
-        }
-        
-        // Update position
-        this.row = newRow;
-        this.col = newCol;
-        
-        // Add character token to new tile
-        const newTileElement = this.getCurrentTileElement();
-        if (newTileElement && this.characterToken) {
-            newTileElement.appendChild(this.characterToken);
-        }
-        
-        // Explore the new tile
-        if (targetTileComponent) {
-            targetTileComponent.markExplored();
-            this.exploredTiles++;
-        }
-        
-        // Increment move counter
-        this.movesMade++;
-        
-        // Emit moved event
-        eventSystem.emit('playerMoved', {
-            player: this,
-            fromRow: this.row,
-            fromCol: this.col,
-            toRow: newRow,
-            toCol: newCol
-        });
         
         return true;
     }
@@ -174,8 +151,9 @@ class PlayerComponent extends Component {
     /**
      * Set the current action
      * @param {string|null} action - The action to set (move, sense, interact, stabilize) or null to clear
+     * @param {EntityComponentSystem} eventSystem - The event system to emit events
      */
-    setAction(action) {
+    setAction(action, eventSystem) {
         // Clear previous action
         if (this.currentAction) {
             // Remove any highlighting from previous action
@@ -190,11 +168,18 @@ class PlayerComponent extends Component {
             this.highlightActionTiles();
         }
         
-        // Emit event
-        eventSystem.emit('playerActionChanged', {
-            player: this,
-            action: action
-        });
+        // Emit action changed event if we have an event system
+        if (eventSystem) {
+            eventSystem.emitStandardized(
+                EventTypes.PLAYER_ACTION_CHANGED.legacy,
+                EventTypes.PLAYER_ACTION_CHANGED.standard,
+                {
+                    action: action,
+                    entity: this,
+                    isStandardized: true
+                }
+            );
+        }
     }
     
     /**
@@ -286,14 +271,18 @@ class PlayerComponent extends Component {
         this.energyUsed += amount;
         
         // Emit energy changed event
-        eventSystem.emit('playerEnergyChanged', {
-            player: this,
-            energy: this.energy,
-            // Legacy properties for backward compatibility
-            currentEnergy: this.energy,
-            maxEnergy: this.maxEnergy,
-            energyUsed: amount
-        });
+        eventSystem.emitStandardized(
+            EventTypes.PLAYER_ENERGY_CHANGED.legacy,
+            EventTypes.PLAYER_ENERGY_CHANGED.standard,
+            {
+                player: this,
+                oldEnergy: this.energy + amount,
+                newEnergy: this.energy,
+                energy: this.energy,
+                delta: -amount,
+                isStandardized: true
+            }
+        );
         
         return true;
     }
@@ -310,11 +299,17 @@ class PlayerComponent extends Component {
         this.movementPoints--;
         
         // Emit movement points changed event
-        eventSystem.emit('playerMovementPointsChanged', {
-            player: this,
-            currentPoints: this.movementPoints,
-            maxPoints: this.maxMovementPoints
-        });
+        eventSystem.emitStandardized(
+            EventTypes.PLAYER_MOVEMENT_POINTS_CHANGED.legacy,
+            EventTypes.PLAYER_MOVEMENT_POINTS_CHANGED.standard,
+            {
+                player: this,
+                oldMovementPoints: this.movementPoints + 1,
+                movementPoints: this.movementPoints,
+                delta: -1,
+                isStandardized: true
+            }
+        );
         
         return true;
     }
@@ -360,10 +355,15 @@ class PlayerComponent extends Component {
         }
         
         // Emit event
-        eventSystem.emit('playerTraitAdded', {
-            player: this,
-            trait: trait
-        });
+        eventSystem.emitStandardized(
+            EventTypes.PLAYER_TRAIT_ADDED.legacy,
+            EventTypes.PLAYER_TRAIT_ADDED.standard,
+            {
+                player: this,
+                trait: trait,
+                isStandardized: true
+            }
+        );
     }
     
     /**
@@ -401,15 +401,17 @@ class PlayerComponent extends Component {
         
         // Emit event if not suppressed
         if (!suppressEvent) {
-            eventSystem.emit('playerEvolutionPointsChanged', {
-                player: this,
-                chaosPoints: this.chaosEvolutionPoints,
-                flowPoints: this.flowEvolutionPoints,
-                orderPoints: this.orderEvolutionPoints,
-                totalPoints: this.evolutionPoints,
-                added: amount,
-                addedType: type
-            });
+            eventSystem.emitStandardized(
+                EventTypes.PLAYER_EVOLUTION_POINTS_CHANGED.legacy,
+                EventTypes.PLAYER_EVOLUTION_POINTS_CHANGED.standard,
+                {
+                    player: this,
+                    type: type,
+                    points: amount,
+                    total: this.evolutionPoints,
+                    isStandardized: true
+                }
+            );
         }
         
         console.log(`Added ${amount} ${type} evolution points. Total: ${this.evolutionPoints}`);
@@ -428,20 +430,30 @@ class PlayerComponent extends Component {
         this.energy = Math.min(this.maxEnergy, this.energy + energyRestore);
         
         // Emit events
-        eventSystem.emit('playerMovementPointsChanged', {
-            player: this,
-            currentPoints: this.movementPoints,
-            maxPoints: this.maxMovementPoints
-        });
+        eventSystem.emitStandardized(
+            EventTypes.PLAYER_MOVEMENT_POINTS_CHANGED.legacy,
+            EventTypes.PLAYER_MOVEMENT_POINTS_CHANGED.standard,
+            {
+                player: this,
+                oldMovementPoints: this.movementPoints + 1,
+                movementPoints: this.movementPoints,
+                delta: 0,
+                isStandardized: true
+            }
+        );
         
-        eventSystem.emit('playerEnergyChanged', {
-            player: this,
-            energy: this.energy,
-            // Legacy properties for backward compatibility
-            currentEnergy: this.energy,
-            maxEnergy: this.maxEnergy,
-            energyRestored: energyRestore
-        });
+        eventSystem.emitStandardized(
+            EventTypes.PLAYER_ENERGY_CHANGED.legacy,
+            EventTypes.PLAYER_ENERGY_CHANGED.standard,
+            {
+                player: this,
+                oldEnergy: this.energy - energyRestore,
+                newEnergy: this.energy,
+                energy: this.energy,
+                delta: energyRestore,
+                isStandardized: true
+            }
+        );
     }
     
     /**

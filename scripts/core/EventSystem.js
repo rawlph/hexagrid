@@ -507,6 +507,50 @@ export class EventSystem {
             console.log(`Legacy emissions re-enabled for: ${events}`);
         }
     }
+    
+    /**
+     * Completely disable all legacy events (should only be used in v2.0 or later)
+     * This is a convenience method to make it easier to fully migrate to standardized events
+     * @param {boolean} showWarnings - Whether to show warnings about this being a breaking change
+     * @returns {boolean} Whether all legacy events were disabled
+     */
+    disableAllLegacyEvents(showWarnings = true) {
+        if (showWarnings) {
+            console.warn('⚠️ WARNING: Disabling ALL legacy events. This is a breaking change!');
+            console.warn('This should only be done in v2.0 or later when all code has been updated to use standardized events.');
+            console.warn('If you are seeing unexpected behavior, revert this change and complete migration first.');
+        }
+        
+        // Master switch to disable all legacy events
+        this.disableLegacyEvents = true;
+        
+        // Log statistics of what was disabled
+        const stats = this.getMigrationStats();
+        console.log(`Disabled ${Object.keys(stats.legacyEventUsage).length} legacy event types.`);
+        console.log(`Standardization progress before disabling: ${stats.standardizationPercentage}%`);
+        
+        return true;
+    }
+    
+    /**
+     * Get legacy event usage sorted by frequency
+     * Useful for identifying which legacy events are still most actively used
+     * @returns {Array} Legacy events sorted by usage count (descending)
+     */
+    getLegacyEventUsageRanking() {
+        const sorted = Object.entries(this.legacyEventUsage)
+            .sort((a, b) => b[1] - a[1])
+            .map(([eventName, count]) => {
+                return {
+                    eventName,
+                    count,
+                    standardName: getStandardName ? getStandardName(eventName) : null,
+                    hasStandardName: !!getStandardName && !!getStandardName(eventName)
+                };
+            });
+        
+        return sorted;
+    }
 }
 
 // Create singleton instance

@@ -88,12 +88,17 @@ export class TurnSystem {
             this.registerEventListeners();
             
             // Emit system initialized event
-            eventSystem.emit('turnSystemInitialized', {
-                gameStage: this.gameStage,
-                maxTurns: this.maxTurns,
-                balanceThreshold: this.balanceThreshold,
-                evolutionThreshold: this.evolutionThreshold[this.gameStage]
-            });
+            eventSystem.emitStandardized(
+                EventTypes.TURN_SYSTEM_INITIALIZED.legacy,
+                EventTypes.TURN_SYSTEM_INITIALIZED.standard,
+                {
+                    gameStage: this.gameStage,
+                    maxTurns: this.maxTurns,
+                    balanceThreshold: this.balanceThreshold,
+                    evolutionThreshold: this.evolutionThreshold[this.gameStage],
+                    isStandardized: true
+                }
+            );
             
             // Start first turn
             this.startTurn();
@@ -558,13 +563,18 @@ export class TurnSystem {
         );
         
         // Then emit evolutionPointsAwarded for the feedback message
-        eventSystem.emit('evolutionPointsAwarded', {
-            turnCount: this.turnCount,
-            pointsAwarded: pointsToAward,
-            gameStage: this.gameStage,
-            balance: this.getSystemBalance(),
-            currentLevelPoints: this.currentLevelPoints
-        });
+        eventSystem.emitStandardized(
+            EventTypes.EVOLUTION_POINTS_AWARDED.legacy,
+            EventTypes.EVOLUTION_POINTS_AWARDED.standard,
+            {
+                turnCount: this.turnCount,
+                pointsAwarded: pointsToAward,
+                gameStage: this.gameStage,
+                balance: this.getSystemBalance(),
+                currentLevelPoints: this.currentLevelPoints,
+                isStandardized: true
+            }
+        );
         
         console.log(`Evolution points awarded: Chaos=${pointsToAward.chaos}, Flow=${pointsToAward.flow}, Order=${pointsToAward.order}`);
         console.log(`Current level points: ${JSON.stringify(this.currentLevelPoints)}`);
@@ -593,13 +603,18 @@ export class TurnSystem {
             this.canEvolve = canEvolveNow;
             
             // Emit evolution ready event
-            eventSystem.emit('evolutionReady', {
-                canEvolve: this.canEvolve,
-                currentLevelTotal: currentLevelTotal,
-                totalPoints: playerComponent.getTotalEvolutionPoints(),
-                threshold: threshold,
-                gameStage: this.gameStage
-            });
+            eventSystem.emitStandardized(
+                EventTypes.EVOLUTION_READY.legacy,
+                EventTypes.EVOLUTION_READY.standard,
+                {
+                    canEvolve: this.canEvolve,
+                    currentLevelTotal: currentLevelTotal,
+                    totalPoints: playerComponent.getTotalEvolutionPoints(),
+                    threshold: threshold,
+                    gameStage: this.gameStage,
+                    isStandardized: true
+                }
+            );
             
             console.log(`Evolution ready state changed: ${this.canEvolve ? 'Ready to evolve!' : 'Not ready yet'}`);
             console.log(`Current level points: ${currentLevelTotal}/${threshold}, Total accumulated: ${playerComponent.getTotalEvolutionPoints()}`);

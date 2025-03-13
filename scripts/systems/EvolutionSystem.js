@@ -4,6 +4,8 @@
 import { MetricsSystem } from './MetricsSystem.js';
 import { entityManager } from '../core/EntityManager.js';
 import { PlayerComponent } from '../components/PlayerComponent.js';
+import { eventSystem } from '../core/EventSystem.js';
+import { EventTypes } from '../core/EventTypes.js';
 
 export class EvolutionSystem {
     constructor() {
@@ -284,10 +286,15 @@ export class EvolutionSystem {
             
             // Emit trait purchased event regardless of whether the trait was added
             // (if the player already has the trait, we still deducted points)
-            eventSystem.emit('traitPurchased', {
-                trait: trait,
-                player: playerComponent
-            });
+            eventSystem.emitStandardized(
+                EventTypes.TRAIT_PURCHASED.legacy,
+                EventTypes.TRAIT_PURCHASED.standard,
+                {
+                    trait: trait,
+                    player: playerComponent,
+                    isStandardized: true
+                }
+            );
             
             return added;
         } catch (error) {
@@ -344,10 +351,15 @@ export class EvolutionSystem {
         playerComponent.addEvolutionPoints(points);
         
         // Emit event
-        eventSystem.emit('evolutionPointsAwarded', {
-            points: points,
-            totalPoints: this.availablePoints
-        });
+        eventSystem.emitStandardized(
+            EventTypes.EVOLUTION_POINTS_AWARDED.legacy,
+            EventTypes.EVOLUTION_POINTS_AWARDED.standard,
+            {
+                points: points,
+                totalPoints: this.availablePoints,
+                isStandardized: true
+            }
+        );
     }
     
     /**
@@ -432,41 +444,40 @@ export class EvolutionSystem {
      * @param {boolean} keepTraits - Whether to keep acquired traits
      */
     reset(keepTraits = true) {
-        console.log(`EvolutionSystem: Resetting evolution system, keepTraits=${keepTraits}`);
+        console.log(`Resetting evolution system, keepTraits=${keepTraits}`);
         
-        // Reset points in the evolution system
+        // Reset points
         this.availablePoints = 0;
         
-        // Reset acquired traits if not keeping them
         if (!keepTraits) {
+            // Reset acquired traits (unless we're keeping them)
             this.acquiredTraits = {};
-        }
-        
-        // Also reset the player's evolution points
-        // Find the player entity
-        const playerEntity = entityManager.getEntitiesByTag('player')[0];
-        if (playerEntity) {
-            const playerComponent = playerEntity.getComponent(PlayerComponent);
-            if (playerComponent) {
-                console.log("EvolutionSystem: Found player component, resetting evolution points");
-                
-                // Reset player evolution points
-                playerComponent.chaosEvolutionPoints = 0;
-                playerComponent.flowEvolutionPoints = 0;
-                playerComponent.orderEvolutionPoints = 0;
-                playerComponent.evolutionPoints = 0;
-                
-                // Clear traits if not keeping them
-                if (!keepTraits) {
-                    playerComponent.traits = [];
+            
+            // Reset the traits on the player component
+            try {
+                const playerEntity = entityManager.getEntitiesByTag('player')[0];
+                if (playerEntity) {
+                    const playerComponent = playerEntity.getComponent(PlayerComponent);
+                    if (playerComponent) {
+                        // Clear traits
+                        playerComponent.traits = [];
+                        console.log("Cleared player traits in evolution system reset");
+                    }
                 }
+            } catch (error) {
+                console.error("Error resetting player traits:", error);
             }
         }
         
-        // Emit event
-        eventSystem.emit('evolutionSystemReset', {
-            keepTraits: keepTraits
-        });
+        // Emit reset event
+        eventSystem.emitStandardized(
+            EventTypes.EVOLUTION_SYSTEM_RESET.legacy,
+            EventTypes.EVOLUTION_SYSTEM_RESET.standard,
+            {
+                keepTraits: keepTraits,
+                isStandardized: true
+            }
+        );
     }
     
     /**

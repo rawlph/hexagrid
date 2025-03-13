@@ -205,6 +205,68 @@ export const EventTypes = {
             version: '2.0.0',
             message: 'Use ui:action:panel:ready instead. The legacy actionPanelReady event will be removed in v2.0'
         }
+    },
+    
+    // Evolution events
+    EVOLUTION_READY: {
+        legacy: 'evolutionReady',
+        standard: 'system:evolution:ready',
+        deprecation: {
+            version: '2.0.0',
+            message: 'Use system:evolution:ready instead. The legacy evolutionReady event will be removed in v2.0'
+        }
+    },
+    TRAIT_PURCHASED: {
+        legacy: 'traitPurchased',
+        standard: 'player:trait:purchased',
+        deprecation: {
+            version: '2.0.0',
+            message: 'Use player:trait:purchased instead. The legacy traitPurchased event will be removed in v2.0'
+        }
+    },
+    EVOLUTION_SYSTEM_RESET: {
+        legacy: 'evolutionSystemReset',
+        standard: 'system:evolution:reset',
+        deprecation: {
+            version: '2.0.0',
+            message: 'Use system:evolution:reset instead. The legacy evolutionSystemReset event will be removed in v2.0'
+        }
+    },
+    
+    // Metrics events
+    LEVEL_METRICS_SAVED: {
+        legacy: 'levelMetricsSaved',
+        standard: 'metrics:level:saved',
+        deprecation: {
+            version: '2.0.0',
+            message: 'Use metrics:level:saved instead. The legacy levelMetricsSaved event will be removed in v2.0'
+        }
+    },
+    ACHIEVEMENTS_COMPLETED: {
+        legacy: 'achievementsCompleted',
+        standard: 'metrics:achievements:completed',
+        deprecation: {
+            version: '2.0.0',
+            message: 'Use metrics:achievements:completed instead. The legacy achievementsCompleted event will be removed in v2.0'
+        }
+    },
+    METRICS_RESET: {
+        legacy: 'metricsReset',
+        standard: 'metrics:reset',
+        deprecation: {
+            version: '2.0.0',
+            message: 'Use metrics:reset instead. The legacy metricsReset event will be removed in v2.0'
+        }
+    },
+    
+    // System initialization events
+    TURN_SYSTEM_INITIALIZED: {
+        legacy: 'turnSystemInitialized',
+        standard: 'system:turn:initialized',
+        deprecation: {
+            version: '2.0.0',
+            message: 'Use system:turn:initialized instead. The legacy turnSystemInitialized event will be removed in v2.0'
+        }
     }
 };
 

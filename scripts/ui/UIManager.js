@@ -4,6 +4,8 @@
 import { MetricsSystem } from '../systems/MetricsSystem.js';
 import { ActionPanel } from './ActionPanel.js';
 import { MessageSystem } from './MessageSystem.js';
+import { eventSystem } from '../core/EventSystem.js';
+import { EventTypes } from '../core/EventTypes.js';
 
 export class UIManager {
     constructor() {
@@ -87,9 +89,14 @@ export class UIManager {
             console.log("ActionPanel initialized in UIManager");
             
             // Emit event to notify systems that ActionPanel is ready
-            eventSystem.emit('actionPanelReady', {
-                actionPanel: this.actionPanel
-            });
+            eventSystem.emitStandardized(
+                EventTypes.ACTION_PANEL_READY.legacy,
+                EventTypes.ACTION_PANEL_READY.standard,
+                {
+                    actionPanel: this.actionPanel,
+                    isStandardized: true
+                }
+            );
         }, 0);
         
         return true;
