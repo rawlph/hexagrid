@@ -6,6 +6,7 @@ import { TileComponent } from './TileComponent.js';
 import { entityManager, Component } from '../core/EntityManager.js';
 import { eventSystem } from '../core/EventSystem.js';
 import { EventTypes } from '../core/EventTypes.js';
+import { eventMediator } from '../core/EventMediator.js';
 
 export class PlayerComponent extends Component {
     /**
@@ -346,28 +347,31 @@ export class PlayerComponent extends Component {
             return false;
         }
         
-        // Store old energy value
-        const oldEnergy = this.energy;
+        // Use the EventMediator to handle the energy change transaction
+        const result = eventMediator.handlePlayerEnergyChange({
+            player: this,
+            amount: -amount,  // Negative amount for consumption
+            source: 'action'
+        });
         
-        // Deduct energy
-        this.energy = Math.max(0, this.energy - amount);
+        if (!result.success) {
+            console.error(`Failed to use energy: ${result.error}`);
+            return false;
+        }
         
-        // Emit energy changed event with standardized property name
-        eventSystem.emitStandardized(
-            EventTypes.PLAYER_ENERGY_CHANGED.legacy,
-            EventTypes.PLAYER_ENERGY_CHANGED.standard,
-            {
-                player: this,
-                oldEnergy: oldEnergy,
-                energy: this.energy,
-                // Include for backward compatibility (temporary)
-                newEnergy: this.energy,
-                delta: this.energy - oldEnergy
-            }
-        );
-        
-        console.log(`Energy updated: ${oldEnergy} -> ${this.energy} (delta: ${this.energy - oldEnergy})`);
+        console.log(`Energy updated: ${result.oldEnergy} -> ${result.newEnergy} (delta: ${result.delta})`);
         return true;
+    }
+    
+    /**
+     * Internal method to directly update energy without using the mediator
+     * Used by the EventMediator to avoid infinite recursion
+     * @param {number} newValue - New energy value
+     * @private
+     */
+    _updateEnergyDirect(newValue) {
+        this.energy = Math.max(0, Math.min(this.maxEnergy, newValue));
+        return this.energy;
     }
     
     /**
@@ -378,28 +382,19 @@ export class PlayerComponent extends Component {
     addEnergy(amount) {
         console.log(`PlayerComponent.addEnergy: Adding ${amount} energy, current energy: ${this.energy}`);
         
-        // Store old energy value
-        const oldEnergy = this.energy;
+        // Use the EventMediator to handle the energy change transaction
+        const result = eventMediator.handlePlayerEnergyChange({
+            player: this,
+            amount: amount,  // Positive amount for addition
+            source: 'restore'
+        });
         
-        // Add energy, but don't exceed maximum
-        this.energy = Math.min(this.maxEnergy, this.energy + amount);
+        if (!result.success) {
+            console.error(`Failed to add energy: ${result.error}`);
+            return false;
+        }
         
-        // Emit energy changed event
-        eventSystem.emitStandardized(
-            EventTypes.PLAYER_ENERGY_CHANGED.legacy,
-            EventTypes.PLAYER_ENERGY_CHANGED.standard,
-            {
-                player: this,
-                oldEnergy: oldEnergy,
-                energy: this.energy,
-                // Include for backward compatibility (temporary)
-                newEnergy: this.energy,
-                delta: this.energy - oldEnergy,
-                energyRestored: amount
-            }
-        );
-        
-        console.log(`Energy updated: ${oldEnergy} -> ${this.energy} (delta: ${this.energy - oldEnergy})`);
+        console.log(`Energy updated: ${result.oldEnergy} -> ${result.newEnergy} (delta: ${result.delta})`);
         return true;
     }
     
@@ -417,28 +412,31 @@ export class PlayerComponent extends Component {
             return false;
         }
         
-        // Store old value
-        const oldMovementPoints = this.movementPoints;
+        // Use the EventMediator to handle the movement points change transaction
+        const result = eventMediator.handlePlayerMovementPointsChange({
+            player: this,
+            amount: -amount,  // Negative amount for consumption
+            source: 'action'
+        });
         
-        // Deduct movement points
-        this.movementPoints = Math.max(0, this.movementPoints - amount);
+        if (!result.success) {
+            console.error(`Failed to use movement points: ${result.error}`);
+            return false;
+        }
         
-        // Emit movement points changed event
-        eventSystem.emitStandardized(
-            EventTypes.PLAYER_MOVEMENT_POINTS_CHANGED.legacy,
-            EventTypes.PLAYER_MOVEMENT_POINTS_CHANGED.standard,
-            {
-                player: this,
-                oldMovementPoints: oldMovementPoints,
-                movementPoints: this.movementPoints,
-                // Include for backward compatibility (temporary)
-                newMovementPoints: this.movementPoints,
-                delta: this.movementPoints - oldMovementPoints
-            }
-        );
-        
-        console.log(`Movement points updated: ${oldMovementPoints} -> ${this.movementPoints}`);
+        console.log(`Movement points updated: ${result.oldMovementPoints} -> ${result.newMovementPoints} (delta: ${result.delta})`);
         return true;
+    }
+    
+    /**
+     * Internal method to directly update movement points without using the mediator
+     * Used by the EventMediator to avoid infinite recursion
+     * @param {number} newValue - New movement points value
+     * @private
+     */
+    _updateMovementPointsDirect(newValue) {
+        this.movementPoints = Math.max(0, Math.min(this.maxMovementPoints, newValue));
+        return this.movementPoints;
     }
     
     /**
@@ -449,28 +447,19 @@ export class PlayerComponent extends Component {
     addMovementPoints(amount) {
         console.log(`PlayerComponent.addMovementPoints: Adding ${amount} movement points, current: ${this.movementPoints}`);
         
-        // Store old value
-        const oldMovementPoints = this.movementPoints;
+        // Use the EventMediator to handle the movement points change transaction
+        const result = eventMediator.handlePlayerMovementPointsChange({
+            player: this,
+            amount: amount,  // Positive amount for addition
+            source: 'restore'
+        });
         
-        // Add movement points, but don't exceed maximum
-        this.movementPoints = Math.min(this.maxMovementPoints, this.movementPoints + amount);
+        if (!result.success) {
+            console.error(`Failed to add movement points: ${result.error}`);
+            return false;
+        }
         
-        // Emit movement points changed event
-        eventSystem.emitStandardized(
-            EventTypes.PLAYER_MOVEMENT_POINTS_CHANGED.legacy,
-            EventTypes.PLAYER_MOVEMENT_POINTS_CHANGED.standard,
-            {
-                player: this,
-                oldMovementPoints: oldMovementPoints,
-                movementPoints: this.movementPoints,
-                // Include for backward compatibility (temporary)
-                newMovementPoints: this.movementPoints,
-                delta: this.movementPoints - oldMovementPoints,
-                movementPointsRestored: amount
-            }
-        );
-        
-        console.log(`Movement points updated: ${oldMovementPoints} -> ${this.movementPoints}`);
+        console.log(`Movement points updated: ${result.oldMovementPoints} -> ${result.newMovementPoints} (delta: ${result.delta})`);
         return true;
     }
     
@@ -569,63 +558,58 @@ export class PlayerComponent extends Component {
     }
     
     /**
-     * Add evolution points of a specific type
-     * @param {string} type - Type of points (chaos, flow, order)
-     * @param {number} amount - Amount to add
-     * @param {boolean} suppressEvent - Whether to suppress event emission
+     * Add evolution points to the player
+     * @param {number} chaosPoints - Amount of chaos evolution points to add
+     * @param {number} flowPoints - Amount of flow evolution points to add
+     * @param {number} orderPoints - Amount of order evolution points to add
+     * @returns {boolean} Always returns true
      */
-    addEvolutionPoints(type, amount, suppressEvent = false) {
-        // Validate input
-        if (amount <= 0) {
-            return;
+    addEvolutionPoints(chaosPoints, flowPoints, orderPoints) {
+        const totalPoints = chaosPoints + flowPoints + orderPoints;
+        console.log(`PlayerComponent.addEvolutionPoints: Adding ${totalPoints} evolution points`);
+        
+        // Use the EventMediator to handle the evolution points change transaction
+        const result = eventMediator.handlePlayerEvolutionPointsChange({
+            player: this,
+            points: {
+                chaos: chaosPoints,
+                flow: flowPoints,
+                order: orderPoints
+            },
+            source: 'turn'
+        });
+        
+        if (!result.success) {
+            console.error(`Failed to add evolution points: ${result.error}`);
+            return false;
         }
         
-        // Add points based on type
-        if (type === 'chaos') {
-            this.chaosEvolutionPoints += amount;
-        } else if (type === 'flow') {
-            this.flowEvolutionPoints += amount;
-        } else if (type === 'order') {
-            this.orderEvolutionPoints += amount;
-        } else {
-            // Legacy support
-            this.evolutionPoints += amount;
-        }
-        
-        // Update total - make sure individual categories are included
-        this.evolutionPoints = (this.chaosEvolutionPoints || 0) + 
-                             (this.flowEvolutionPoints || 0) + 
-                             (this.orderEvolutionPoints || 0);
-        
-        // Emit event unless suppressed
-        if (!suppressEvent && window.eventSystem) {
-            window.eventSystem.emitStandardized(
-                EventTypes.PLAYER_EVOLUTION_POINTS_CHANGED.legacy,
-                EventTypes.PLAYER_EVOLUTION_POINTS_CHANGED.standard,
-                {
-                    player: this,
-                    chaosPoints: this.chaosEvolutionPoints,
-                    flowPoints: this.flowEvolutionPoints,
-                    orderPoints: this.orderEvolutionPoints,
-                    totalPoints: this.evolutionPoints,
-                    added: amount,
-                    addedType: type,
-                    // Include isStandardized flag for consistency
-                    isStandardized: true
-                },
-                EventTypes.PLAYER_EVOLUTION_POINTS_CHANGED.deprecation
-            );
-        }
-        
-        console.log(`Added ${amount} ${type} evolution points. New total: ${this.evolutionPoints}`);
+        return true;
     }
     
     /**
-     * Get the total of all evolution points
-     * @returns {number} Total evolution points
+     * Internal method to directly update evolution points without using the mediator
+     * Used by the EventMediator to avoid infinite recursion
+     * @param {number} chaosPoints - New chaos points value
+     * @param {number} flowPoints - New flow points value
+     * @param {number} orderPoints - New order points value
+     * @private
      */
-    getTotalEvolutionPoints() {
-        return this.chaosEvolutionPoints + this.flowEvolutionPoints + this.orderEvolutionPoints;
+    _updateEvolutionPointsDirect(chaosPoints, flowPoints, orderPoints) {
+        // Add points to existing values
+        this.chaosEvolutionPoints += chaosPoints;
+        this.flowEvolutionPoints += flowPoints;
+        this.orderEvolutionPoints += orderPoints;
+        
+        // Update total - make sure individual categories are included
+        this.evolutionPoints = this.chaosEvolutionPoints + this.flowEvolutionPoints + this.orderEvolutionPoints;
+        
+        return {
+            chaos: this.chaosEvolutionPoints,
+            flow: this.flowEvolutionPoints,
+            order: this.orderEvolutionPoints,
+            total: this.evolutionPoints
+        };
     }
     
     /**
@@ -1033,5 +1017,45 @@ export class PlayerComponent extends Component {
         
         console.log(`PlayerComponent: Reset energy to ${this.energy}`);
         return this.energy;
+    }
+    
+    /**
+     * Get the total of all evolution points
+     * @returns {number} Total evolution points
+     */
+    getTotalEvolutionPoints() {
+        return this.chaosEvolutionPoints + this.flowEvolutionPoints + this.orderEvolutionPoints;
+    }
+    
+    /**
+     * Check if player can evolve
+     * @returns {boolean} Whether player can evolve
+     */
+    canEvolve() {
+        // Can add more complex logic here if needed, such as checking against a threshold
+        return this.getTotalEvolutionPoints() > 0;
+    }
+    
+    /**
+     * Get available traits for evolution
+     * @returns {Array} Array of available traits
+     */
+    getAvailableTraits() {
+        // This would typically pull from the EvolutionSystem
+        // For now, just return an empty array as placeholder
+        return [];
+    }
+    
+    /**
+     * Get player statistics
+     * @returns {Object} Player statistics
+     */
+    getStats() {
+        return {
+            tilesExplored: this.tilesExplored,
+            movesMade: this.movesMade,
+            actionsPerformed: this.actionsPerformed,
+            turnsCompleted: this.turnsCompleted
+        };
     }
 }

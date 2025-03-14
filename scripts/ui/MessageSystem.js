@@ -109,7 +109,14 @@ class MessageSystem {
         // Tile events - updated to use standardized event names
         this._registeredEvents.push(
             eventSystem.on(EventTypes.TILE_EXPLORED.standard, data => {
-                this.addLogMessage(`Explored ${data.type} tile at (${data.row}, ${data.col})`, "event");
+                // Skip logging if this was from a sense action since ActionPanel already logs it
+                // The 'sourceAction' property indicates what action caused this exploration
+                if (data.sourceAction === 'sense') {
+                    return;
+                }
+                
+                // Only log exploration from other sources (e.g., initial reveal, quests, etc.)
+                this.addLogMessage(`Explored ${data.tileInfo?.type || 'unknown'} tile at (${data.row}, ${data.col})`, "event");
             })
         );
         

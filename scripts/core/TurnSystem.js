@@ -5,6 +5,7 @@
 import { eventSystem } from './EventSystem.js';
 import { entityManager } from './EntityManager.js';
 import { EventTypes } from './EventTypes.js';
+import { eventMediator } from './EventMediator.js';
 
 export class TurnSystem {
     /**
@@ -564,49 +565,36 @@ export class TurnSystem {
         this.currentLevelPoints.order += pointsToAward.order;
         this.currentLevelPoints.total += pointsToAward.total;
         
-        // Award the points - suppress individual events to avoid duplicate messages
-        if (pointsToAward.chaos > 0) {
-            playerComponent.addEvolutionPoints('chaos', pointsToAward.chaos, true); // Suppress event
-        }
-        
-        if (pointsToAward.flow > 0) {
-            playerComponent.addEvolutionPoints('flow', pointsToAward.flow, true); // Suppress event
-        }
-        
-        if (pointsToAward.order > 0) {
-            playerComponent.addEvolutionPoints('order', pointsToAward.order, true); // Suppress event
-        }
-        
-        // Now that all points have been added, emit events
-        
-        // First emit playerEvolutionPointsChanged to update the UI display
-        eventSystem.emitStandardized(
-            EventTypes.PLAYER_EVOLUTION_POINTS_CHANGED.legacy,
-            EventTypes.PLAYER_EVOLUTION_POINTS_CHANGED.standard,
-            {
-                player: playerComponent,
-                chaosPoints: playerComponent.chaosEvolutionPoints,
-                flowPoints: playerComponent.flowEvolutionPoints,
-                orderPoints: playerComponent.orderEvolutionPoints,
-                totalPoints: playerComponent.evolutionPoints,
-                currentLevelPoints: this.currentLevelPoints,
-                // Include isStandardized flag for consistency
-                isStandardized: true
+        // Award the points through EventMediator
+        const result = eventMediator.handlePlayerEvolutionPointsChange({
+            player: playerComponent,
+            points: {
+                chaos: pointsToAward.chaos,
+                flow: pointsToAward.flow,
+                order: pointsToAward.order
             },
-            EventTypes.PLAYER_EVOLUTION_POINTS_CHANGED.deprecation
-        );
+            source: 'turn'
+        });
         
-        // Then emit evolutionPointsAwarded for the feedback message
+        if (!result.success) {
+            console.error(`Failed to award evolution points: ${result.error}`);
+            return;
+        }
+        
+        // Now emit the evolution points awarded event (separate from points changed)
         eventSystem.emitStandardized(
             EventTypes.EVOLUTION_POINTS_AWARDED.legacy,
             EventTypes.EVOLUTION_POINTS_AWARDED.standard,
             {
+                player: playerComponent,
+                chaosPoints: pointsToAward.chaos,
+                flowPoints: pointsToAward.flow,
+                orderPoints: pointsToAward.order,
+                totalPoints: pointsToAward.total,
                 turnCount: this.turnCount,
-                pointsAwarded: pointsToAward,
-                gameStage: this.gameStage,
                 balance: this.getSystemBalance(),
-                currentLevelPoints: this.currentLevelPoints,
-                isStandardized: true
+                isBalanced: this.isBalanced,
+                consecutiveBalancedTurns: this.consecutiveBalancedTurns
             }
         );
         

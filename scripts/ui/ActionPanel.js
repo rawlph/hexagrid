@@ -357,58 +357,6 @@ export class ActionPanel {
     }
     
     /**
-     * Update system balance
-     * @param {number} chaosDelta - Change in chaos level (-1 to 1) 
-     * @param {string} sourceAction - The action that caused the change (optional)
-     */
-    updateSystemBalance(chaosDelta, sourceAction = null) {
-        if (!this.grid) return;
-        
-        console.log(`ActionPanel: Current balance before update: ${this.grid.getSystemBalance().chaos.toFixed(3)} Chaos / ${this.grid.getSystemBalance().order.toFixed(3)} Order`);
-        
-        // Skip tiny changes that wouldn't actually affect the system
-        if (typeof chaosDelta !== 'number' || Math.abs(chaosDelta) < 0.001) {
-            return;
-        }
-        
-        // Apply scaling based on the action type
-        let scalingFactor = 1;
-        
-        if (sourceAction === 'stabilize') {
-            // Changed from 150 to 15 for testing - stabilize has less impact on system balance
-            scalingFactor = 15; 
-            console.log(`DEBUG - Stabilize: Original chaos delta: ${chaosDelta}, scaled by ${scalingFactor}`);
-        } else if (sourceAction === 'sense') {
-            // Sense has minor impact on system balance
-            scalingFactor = 20;
-        } else if (sourceAction === 'interact') {
-            // Interact has moderate impact on system balance
-            scalingFactor = 10;
-        } else if (sourceAction === 'move') {
-            // Move has minimal impact
-            scalingFactor = 30;
-        } else {
-            // Default scaling
-            scalingFactor = 5;
-        }
-        
-        // Apply scaling
-        const effectiveDelta = chaosDelta / scalingFactor;
-        
-        console.log(`ActionPanel: Updating system balance by ${effectiveDelta.toFixed(4)} (original: ${chaosDelta.toFixed(4)}, scaled by ${scalingFactor})`);
-        
-        // Update the grid's system balance
-        this.grid.updateSystemBalance(effectiveDelta, sourceAction);
-        
-        // Verify the binary duality principle (chaos + order = 1)
-        const newBalance = this.grid.getSystemBalance();
-        const sum = newBalance.chaos + newBalance.order;
-        if (Math.abs(sum - 1.0) > 0.001) {
-            console.error(`Balance error: chaos (${newBalance.chaos}) + order (${newBalance.order}) = ${sum}, not 1.0`);
-        }
-    }
-
-    /**
      * Provide feedback for action execution
      * @param {string} action - The action performed
      * @param {boolean} success - Whether the action was successful
@@ -539,34 +487,26 @@ export class ActionPanel {
     executeMoveAction(actionData) {
         const { player, tileComponent, row, col } = actionData;
         
-        // Try to move the player
-        const success = player.updatePosition(row, col);
+        console.log(`ActionPanel: Executing move action to (${row}, ${col})`);
         
-        if (success) {
-            // Update system balance (move has no chaos effect)
-            this.updateSystemBalance(0, 'move');
-            
-            // Emit standardized event
-            eventSystem.emitStandardized(
-                EventTypes.ACTION_COMPLETE_MOVE.legacy,
-                EventTypes.ACTION_COMPLETE_MOVE.standard,
-                {
-                    player: player,
-                    tileComponent: tileComponent,
-                    row: row,
-                    col: col,
-                    timestamp: Date.now(),
-                    isStandardized: true
-                }
-            );
-            
+        // Use the Event Mediator to handle the move action
+        const result = eventMediator.handleMoveAction({
+            player: player,
+            tileComponent: tileComponent,
+            row: row,
+            col: col,
+            grid: this.grid
+        });
+        
+        if (result.success) {
             // Show feedback
             this.showFeedback(`Moved to (${row}, ${col})`, "success", 2000, true, 'action-move');
-            
             return true;
+        } else {
+            // Show error feedback
+            this.showFeedback(`Failed to move: ${result.error || 'Unable to move to that location'}`, "error", 2000, false, 'action-error');
+            return false;
         }
-        
-        return false;
     }
     
     /**
@@ -582,35 +522,26 @@ export class ActionPanel {
     executeSenseAction(actionData) {
         const { player, tileComponent, row, col } = actionData;
         
-        // Get tile info
-        const tileInfo = tileComponent.getData();
+        console.log(`ActionPanel: Executing sense action at (${row}, ${col})`);
         
-        // Mark tile as explored
-        tileComponent.markExplored();
+        // Use the Event Mediator to handle the sense action
+        const result = eventMediator.handleSenseAction({
+            player: player,
+            tileComponent: tileComponent,
+            row: row,
+            col: col,
+            grid: this.grid
+        });
         
-        // Update system balance
-        const chaosDelta = 0.05; // Sensing increases chaos slightly
-        this.updateSystemBalance(chaosDelta, 'sense');
-        
-        // Emit standardized event
-        eventSystem.emitStandardized(
-            EventTypes.ACTION_COMPLETE_SENSE.legacy,
-            EventTypes.ACTION_COMPLETE_SENSE.standard,
-            {
-                player: player,
-                tileComponent: tileComponent,
-                row: row,
-                col: col,
-                tileInfo: tileInfo,
-                timestamp: Date.now(),
-                isStandardized: true
-            }
-        );
-        
-        // Show feedback
-        this.showFeedback(`Sensed ${tileComponent.type} tile at (${row}, ${col})`, "success", 2000, true, 'action-sense');
-        
-        return true;
+        if (result.success) {
+            // Show feedback
+            this.showFeedback(`Sensed ${result.tileType} tile at (${row}, ${col})`, "success", 2000, true, 'action-sense');
+            return true;
+        } else {
+            // Show error feedback
+            this.showFeedback(`Failed to sense: ${result.error || 'Unknown error'}`, "error", 2000, false, 'action-error');
+            return false;
+        }
     }
     
     /**
@@ -626,99 +557,29 @@ export class ActionPanel {
     executeInteractAction(actionData) {
         const { player, tileComponent, row, col } = actionData;
         
-        // Get tile type
-        const tileType = tileComponent.type;
+        console.log(`ActionPanel: Executing interact action at (${row}, ${col})`);
         
-        // Handle interaction based on tile type
-        let interactionResult = 'No effect';
-        let chaosDelta = 0;
+        // Use the Event Mediator to handle the interact action
+        const result = eventMediator.handleInteractAction({
+            player: player,
+            tileComponent: tileComponent,
+            row: row,
+            col: col,
+            grid: this.grid
+        });
         
-        switch (tileType) {
-            case 'energy':
-                // Energy tiles restore energy
-                const energyRestored = 5;
-                player.addEnergy(energyRestored);
-                interactionResult = `Restored ${energyRestored} energy`;
-                chaosDelta = 0.1; // Interacting with energy increases chaos
-                
-                // Emit standardized event for energy gathered from tile
-                eventSystem.emitStandardized(
-                    EventTypes.ENERGY_GATHERED_FROM_TILE.legacy,
-                    EventTypes.ENERGY_GATHERED_FROM_TILE.standard,
-                    {
-                        player: player,
-                        tileComponent: tileComponent,
-                        row: row,
-                        col: col,
-                        amount: energyRestored,
-                        timestamp: Date.now(),
-                        isStandardized: true
-                    },
-                    EventTypes.ENERGY_GATHERED_FROM_TILE.deprecation
-                );
-                break;
-                
-            case 'chaotic':
-                // Chaotic tiles increase system chaos when interacted with
-                chaosDelta = 0.3;
-                interactionResult = 'Increased chaos level';
-                break;
-                
-            case 'orderly':
-                // Orderly tiles decrease system chaos when interacted with
-                chaosDelta = -0.3;
-                interactionResult = 'Decreased chaos level';
-                break;
-                
-            case 'flow':
-                // Flow tiles restore movement points
-                const movementRestored = 2;
-                player.addMovementPoints(movementRestored);
-                interactionResult = `Restored ${movementRestored} movement points`;
-                chaosDelta = 0;
-                break;
-                
-            case 'normal':
-                // Normal tiles have a small chaos effect
-                chaosDelta = 0.05;
-                interactionResult = 'Slight chaos increase';
-                break;
-                
-            case 'obstacle':
-                // No effect for obstacles
-                interactionResult = 'Cannot interact with obstacles';
-                chaosDelta = 0;
-                break;
-                
-            default:
-                // No effect for other tile types
-                chaosDelta = 0.05; // Small chaos increase for basic interaction
-                break;
+        if (result.success) {
+            // Create a detailed feedback message
+            let feedbackMessage = `Interacted with ${result.tileType} tile: ${result.interactionResult}`;
+            
+            // Show feedback
+            this.showFeedback(feedbackMessage, "success", 2000, true, 'action-interact');
+            return true;
+        } else {
+            // Show error feedback
+            this.showFeedback(`Failed to interact: ${result.error || 'Unknown error'}`, "error", 2000, false, 'action-error');
+            return false;
         }
-        
-        // Update system balance
-        this.updateSystemBalance(chaosDelta, 'interact');
-        
-        // Emit standardized event
-        eventSystem.emitStandardized(
-            EventTypes.ACTION_COMPLETE_INTERACT.legacy,
-            EventTypes.ACTION_COMPLETE_INTERACT.standard,
-            {
-                player: player,
-                tileComponent: tileComponent,
-                row: row,
-                col: col,
-                result: interactionResult,
-                chaosDelta: chaosDelta,
-                timestamp: Date.now(),
-                isStandardized: true
-            }
-        );
-        
-        // Show feedback
-        this.showFeedback(`Interacted with ${tileType} tile: ${interactionResult}`, "success", 2000, true, 'action-interact');
-        
-        return true;
     }
     
     /**

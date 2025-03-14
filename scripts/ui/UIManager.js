@@ -156,6 +156,24 @@ export class UIManager {
                 data => this.updateResourceDisplay('movement', data))
         );
         
+        // Add listener for player stats updates to ensure UI stays in sync
+        this._registeredEvents.push(
+            eventSystem.on('player:stats:updated', 
+                data => {
+                    if (this.debugMode) {
+                        console.log('Received player:stats:updated event:', data);
+                    }
+                    // Update all player resources at once
+                    this.updateResourceDisplay('energy', data);
+                    this.updateResourceDisplay('movement', data);
+                    
+                    // Also update evolution points from stats updates
+                    if (data.evolutionPoints) {
+                        this.updateEvolutionPointsDisplay(data);
+                    }
+                })
+        );
+        
         // Turn system events
         this._registeredEvents.push(
             eventSystem.on(EventTypes.TURN_START.standard, this.updateTurnDisplay.bind(this))
@@ -221,11 +239,21 @@ export class UIManager {
         
         switch(resourceType) {
             case 'energy':
-                // Standardized property name is simply 'energy'
-                return data.energy || 0;
+                // Check for different property structures in events
+                if (data.energy !== undefined) return data.energy;
+                if (data.newValue !== undefined) return data.newValue;
+                if (data.player && data.player.energy !== undefined) return data.player.energy;
+                if (data.stats && data.stats.energy !== undefined) return data.stats.energy;
+                console.log('Energy event data structure:', data);
+                return 0;
             case 'movement':
-                // Standardized property name is 'movementPoints'
-                return data.movementPoints || 0;
+                // Check for different property structures in events
+                if (data.movementPoints !== undefined) return data.movementPoints;
+                if (data.newValue !== undefined) return data.newValue;
+                if (data.player && data.player.movementPoints !== undefined) return data.player.movementPoints;
+                if (data.stats && data.stats.movementPoints !== undefined) return data.stats.movementPoints;
+                console.log('Movement event data structure:', data);
+                return 0;
             case 'turn':
                 return data.turnCount || 0;
             default:
@@ -671,28 +699,56 @@ export class UIManager {
      * @param {object} data - Evolution points data
      */
     updateEvolutionPointsDisplay(data) {
-        // Use default values of 0 if data properties are undefined
-        const chaosPoints = data.chaosPoints !== undefined ? data.chaosPoints : 0;
-        const flowPoints = data.flowPoints !== undefined ? data.flowPoints : 0;
-        const orderPoints = data.orderPoints !== undefined ? data.orderPoints : 0;
+        // Check for null or undefined data
+        if (!data) {
+            console.warn('UIManager: Null or undefined data passed to updateEvolutionPointsDisplay');
+            return;
+        }
         
-        // Update chaos evolution points - use the specific evolution chaos display
+        // Extract chaos points, checking different possible property structures
+        let chaosPoints = 0;
+        if (data.chaosPoints !== undefined) chaosPoints = data.chaosPoints;
+        else if (data.newValues && data.newValues.chaos !== undefined) chaosPoints = data.newValues.chaos;
+        else if (data.evolutionPoints && data.evolutionPoints.chaos !== undefined) chaosPoints = data.evolutionPoints.chaos;
+        else if (data.player && data.player.chaosEvolutionPoints !== undefined) chaosPoints = data.player.chaosEvolutionPoints;
+        
+        // Extract flow points, checking different possible property structures
+        let flowPoints = 0;
+        if (data.flowPoints !== undefined) flowPoints = data.flowPoints;
+        else if (data.newValues && data.newValues.flow !== undefined) flowPoints = data.newValues.flow;
+        else if (data.evolutionPoints && data.evolutionPoints.flow !== undefined) flowPoints = data.evolutionPoints.flow;
+        else if (data.player && data.player.flowEvolutionPoints !== undefined) flowPoints = data.player.flowEvolutionPoints;
+        
+        // Extract order points, checking different possible property structures
+        let orderPoints = 0;
+        if (data.orderPoints !== undefined) orderPoints = data.orderPoints;
+        else if (data.newValues && data.newValues.order !== undefined) orderPoints = data.newValues.order;
+        else if (data.evolutionPoints && data.evolutionPoints.order !== undefined) orderPoints = data.evolutionPoints.order;
+        else if (data.player && data.player.orderEvolutionPoints !== undefined) orderPoints = data.player.orderEvolutionPoints;
+        
+        // If we couldn't find values and debug is enabled, log the data structure
+        if (this.debugMode && chaosPoints === 0 && flowPoints === 0 && orderPoints === 0) {
+            console.log('UIManager: Could not extract evolution points from data structure:', data);
+        }
+        
+        // Update chaos evolution points display
         if (this.evolutionChaosDisplay) {
             this.evolutionChaosDisplay.textContent = chaosPoints;
         }
         
-        // Update flow evolution points
+        // Update flow evolution points display
         if (this.evolutionFlowDisplay) {
             this.evolutionFlowDisplay.textContent = flowPoints;
         }
         
-        // Update order evolution points - use the specific evolution order display
+        // Update order evolution points display
         if (this.evolutionOrderDisplay) {
             this.evolutionOrderDisplay.textContent = orderPoints;
         }
         
-        // Log updates for debugging
-        console.log(`UIManager: Updated evolution points display - Chaos: ${chaosPoints}, Flow: ${flowPoints}, Order: ${orderPoints}`);
+        if (this.debugMode) {
+            console.log(`UIManager: Updated evolution points display - Chaos: ${chaosPoints}, Flow: ${flowPoints}, Order: ${orderPoints}`);
+        }
     }
     
     /**
