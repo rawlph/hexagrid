@@ -577,21 +577,58 @@ export class UIManager {
      * @param {object} data - Balance data
      */
     updateBalanceDisplay(data) {
-        // Use standardized property names - chaos and order
-        let chaosValue = data.chaos || 0.5;
-        let orderValue = data.order || 0.5;
+        // Check if we have valid balance data
+        if (!data) {
+            console.warn("UIManager.updateBalanceDisplay: No data provided");
+            return;
+        }
         
-        // Ensure values are valid numbers
-        chaosValue = !isNaN(chaosValue) ? chaosValue : 0.5;
-        orderValue = !isNaN(orderValue) ? orderValue : 0.5;
+        // Determine the chaos value from various possible properties
+        // Following the ChaosOrderSystem principles where chaos + order = 1.0
+        let chaosValue;
         
-        // Make sure they're proper values between 0 and 1
+        // If chaos is explicitly provided
+        if (typeof data.chaos === 'number') {
+            chaosValue = data.chaos;
+        } 
+        // Otherwise check for systemChaos
+        else if (typeof data.systemChaos === 'number') {
+            chaosValue = data.systemChaos;
+        } 
+        // Fall back to calculated values if both are provided
+        else if (typeof data.chaosValue === 'number') {
+            chaosValue = data.chaosValue;
+        } 
+        // Default to 0.5 only if we have no valid data
+        else {
+            chaosValue = 0.5;
+            console.warn("UIManager.updateBalanceDisplay: No valid chaos value, defaulting to 0.5");
+        }
+        
+        // Ensure chaos is a valid value between 0 and 1
         chaosValue = Math.max(0, Math.min(1, chaosValue));
-        orderValue = Math.max(0, Math.min(1, orderValue));
+        
+        // Order is ALWAYS 1 - chaos (per ChaosOrderSystem.md: Binary Duality rule)
+        let orderValue = 1 - chaosValue;
+        
+        // Log any mismatches for debugging
+        if (typeof data.order === 'number' && Math.abs(data.order - orderValue) > 0.01) {
+            console.warn(`UIManager.updateBalanceDisplay: Order value mismatch. Received: ${data.order}, Calculated: ${orderValue}`);
+        }
         
         // Convert to percentages
         const chaosPct = Math.round(chaosValue * 100);
-        const orderPct = Math.round(orderValue * 100);
+        let orderPct = Math.round(orderValue * 100);
+        
+        // Ensure the percentages always sum to 100%
+        // In case of rounding artifacts
+        if (chaosPct + orderPct !== 100) {
+            // Adjust order to maintain 100% total
+            // This ensures the display shows values that sum to 100%
+            const newOrderPct = 100 - chaosPct;
+            console.log(`UIManager.updateBalanceDisplay: Adjusted order percent from ${orderPct} to ${newOrderPct} to maintain 100% total`);
+            orderPct = newOrderPct;
+        }
         
         // Update display values
         if (this.balanceChaosDisplay) {

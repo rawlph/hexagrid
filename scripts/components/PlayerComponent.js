@@ -964,4 +964,74 @@ export class PlayerComponent extends Component {
         // Reset to enabled state
         this.enabled = true;
     }
+    
+    /**
+     * Reset movement points to maximum value
+     * @returns {number} New movement points value
+     */
+    resetMovementPoints() {
+        // Get base max movement points
+        let maxPoints = this.maxMovementPoints;
+        
+        // Apply trait modifiers if any
+        if (Array.isArray(this.traits)) {
+            for (const trait of this.traits) {
+                if (trait && trait.modifiesMaxMovementPoints && typeof trait.modifiesMaxMovementPoints === 'function') {
+                    maxPoints = trait.modifiesMaxMovementPoints(maxPoints);
+                }
+            }
+        }
+        
+        // Set to max value
+        this.movementPoints = maxPoints;
+        
+        // Emit event
+        eventSystem.emitStandardized(
+            EventTypes.PLAYER_MOVEMENT_POINTS_CHANGED.legacy,
+            EventTypes.PLAYER_MOVEMENT_POINTS_CHANGED.standard,
+            {
+                player: this,
+                movementPoints: this.movementPoints,
+                isStandardized: true
+            }
+        );
+        
+        console.log(`PlayerComponent: Reset movement points to ${this.movementPoints}`);
+        return this.movementPoints;
+    }
+    
+    /**
+     * Reset energy to maximum value
+     * @returns {number} New energy value
+     */
+    resetEnergy() {
+        // Get base max energy
+        let maxEnergy = this.maxEnergy;
+        
+        // Apply trait modifiers if any
+        if (Array.isArray(this.traits)) {
+            for (const trait of this.traits) {
+                if (trait && trait.modifiesMaxEnergy && typeof trait.modifiesMaxEnergy === 'function') {
+                    maxEnergy = trait.modifiesMaxEnergy(maxEnergy);
+                }
+            }
+        }
+        
+        // Set to max value
+        this.energy = maxEnergy;
+        
+        // Emit event
+        eventSystem.emitStandardized(
+            EventTypes.PLAYER_ENERGY_CHANGED.legacy,
+            EventTypes.PLAYER_ENERGY_CHANGED.standard,
+            {
+                player: this,
+                energy: this.energy,
+                isStandardized: true
+            }
+        );
+        
+        console.log(`PlayerComponent: Reset energy to ${this.energy}`);
+        return this.energy;
+    }
 }

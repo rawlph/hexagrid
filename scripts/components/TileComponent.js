@@ -231,22 +231,65 @@ export class TileComponent extends Component {
     /**
      * Update the chaos level of the tile
      * @param {number} chaosDelta - Change in chaos level (-1 to 1)
+     * @param {string} sourceAction - The action that caused the chaos change (optional)
      * @returns {number} The actual change in chaos level
      */
-    updateChaosLevel(chaosDelta) {
+    updateChaosLevel(chaosDelta, sourceAction = null) {
         if (typeof chaosDelta !== 'number') {
             console.error('TileComponent: chaosDelta must be a number');
             return 0;
         }
         
         const oldChaos = this.chaos;
+        
+        // Apply the delta and ensure chaos stays in valid range
         this.chaos = Math.max(0, Math.min(1, this.chaos + chaosDelta));
+        
+        // Order is ALWAYS 1 - chaos (following the binary duality rule)
         this.order = 1 - this.chaos;
+        
+        // Calculate the actual delta (may differ if clamping occurred)
+        const actualDelta = this.chaos - oldChaos;
+        
+        // Log significant changes
+        if (Math.abs(actualDelta) > 0.05) {
+            console.log(`TileComponent: Chaos ${actualDelta > 0 ? 'increased' : 'decreased'} from ${oldChaos.toFixed(2)} to ${this.chaos.toFixed(2)} at (${this.row},${this.col})`);
+            
+            // If this was from a stabilize action, add extra debug info
+            if (sourceAction === 'stabilize') {
+                console.log(`TileComponent: STABILIZE - Reduced chaos by ${Math.abs(actualDelta).toFixed(3)} (${Math.round(Math.abs(actualDelta) * 100)}%) at (${this.row},${this.col})`);
+            }
+        }
         
         // Update costs when chaos changes
         this.updateActionCosts();
         
-        return this.chaos - oldChaos; // Return the actual change
+        // Emit an event with complete data when chaos changes
+        if (actualDelta !== 0) {
+            const eventSystem = window.eventSystem || (window.game && window.game.eventSystem);
+            if (eventSystem && eventSystem.emitStandardized) {
+                eventSystem.emitStandardized(
+                    'tileChaosChanged', // Legacy event name
+                    'tile:chaos:changed', // Standard event name
+                    {
+                        row: this.row,
+                        col: this.col,
+                        oldChaos: oldChaos,
+                        newChaos: this.chaos,
+                        chaosDelta: actualDelta,
+                        tile: this,
+                        // Always include the source action if provided
+                        sourceAction: sourceAction,
+                        // Include these properties for consistency
+                        chaos: this.chaos,
+                        order: this.order,
+                        isStandardized: true
+                    }
+                );
+            }
+        }
+        
+        return actualDelta; // Return the actual change
     }
     
     /**

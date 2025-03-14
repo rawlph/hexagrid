@@ -113,8 +113,35 @@ class MessageSystem {
             })
         );
         
+        // Add a listener for system balance changes to log significant shifts
+        this._registeredEvents.push(
+            eventSystem.on(EventTypes.SYSTEM_BALANCE_CHANGED.standard, data => {
+                // Skip logging minor balance changes to avoid spam
+                // Also, since ActionPanel now includes balance info in stabilize feedback,
+                // we don't need to log balance changes caused by stabilize actions here
+                
+                // Only log significant balance changes not from stabilize actions
+                if (Math.abs(data.chaosDelta) > 0.01 && data.sourceAction !== 'stabilize') {
+                    const chaosPercent = Math.round(data.chaos * 100);
+                    const orderPercent = Math.round(data.order * 100);
+                    const changeDirection = data.chaosDelta > 0 ? "increased" : "decreased";
+                    const changeAmount = Math.abs(Math.round(data.chaosDelta * 100));
+                    
+                    if (changeAmount >= 1) { // Only log changes of at least 1%
+                        this.addLogMessage(`World balance ${changeDirection} to ${chaosPercent}% Chaos / ${orderPercent}% Order`, "system");
+                    }
+                }
+            })
+        );
+        
         this._registeredEvents.push(
             eventSystem.on(EventTypes.TILE_CHAOS_CHANGED.standard, data => {
+                // Skip logging if this was from a stabilize action since ActionPanel already logs it
+                // The 'sourceAction' property indicates what action caused this chaos change
+                if (data.sourceAction === 'stabilize') {
+                    return;
+                }
+                
                 const changeType = data.chaosDelta > 0 ? "increased" : "decreased";
                 const changeAmt = Math.abs(Math.round(data.chaosDelta * 100));
                 if (changeAmt > 5) { // Only log significant changes

@@ -584,24 +584,46 @@ export class Grid {
     }
     
     /**
-     * Update system balance based on a chaos delta
-     * @param {number} chaosDelta - Change in chaos (-1 to 1)
-     * @returns {Object} New system balance
+     * Update system-wide chaos/order balance
+     * @param {number} chaosDelta - Change in chaos level (-1 to 1)
+     * @param {string} sourceAction - The action that caused the change (optional)
+     * @returns {Object} Object with updated chaos and order values
      */
-    updateSystemBalance(chaosDelta) {
+    updateSystemBalance(chaosDelta, sourceAction = null) {
         // Ensure chaosDelta is a valid number
         if (typeof chaosDelta !== 'number' || isNaN(chaosDelta)) {
             console.warn("Grid.updateSystemBalance: Invalid chaosDelta value:", chaosDelta);
             chaosDelta = 0;
         }
         
-        // Store old values
+        // Store old values for comparison
         const oldChaos = this.systemChaos;
         const oldOrder = this.systemOrder;
         
-        // Update chaos and order
+        // Verify that current values follow the chaos+order=1 rule
+        if (Math.abs(oldChaos + oldOrder - 1) > 0.001) {
+            console.error(`Grid.updateSystemBalance: Invalid initial state! Chaos (${oldChaos}) + Order (${oldOrder}) != 1.0`);
+            // Correct the imbalance by resetting order based on chaos
+            this.systemOrder = 1 - this.systemChaos;
+            console.log(`Grid.updateSystemBalance: Corrected order value to ${this.systemOrder}`);
+        }
+        
+        // Update chaos, ensuring it stays within valid range
         this.systemChaos = utils.clamp(this.systemChaos + chaosDelta, 0, 1);
+        
+        // Order is ALWAYS calculated as 1 - chaos (per ChaosOrderSystem.md)
         this.systemOrder = 1 - this.systemChaos;
+        
+        // Log significant changes for debugging
+        if (Math.abs(chaosDelta) > 0.01) {
+            console.log(`Grid.updateSystemBalance: Chaos ${chaosDelta > 0 ? 'increased' : 'decreased'} by ${Math.abs(chaosDelta).toFixed(3)}`);
+            console.log(`Grid.updateSystemBalance: New balance - Chaos: ${this.systemChaos.toFixed(2)}, Order: ${this.systemOrder.toFixed(2)}`);
+            
+            // Log the source action if provided
+            if (sourceAction) {
+                console.log(`Grid.updateSystemBalance: Change caused by '${sourceAction}' action`);
+            }
+        }
         
         // Emit change event with consistent property names
         eventSystem.emitStandardized(
@@ -613,6 +635,8 @@ export class Grid {
                 systemChaos: this.systemChaos,
                 systemOrder: this.systemOrder,
                 chaosDelta,
+                // Include source action if provided
+                sourceAction,
                 // Include simple property names for consistency
                 chaos: this.systemChaos,
                 order: this.systemOrder

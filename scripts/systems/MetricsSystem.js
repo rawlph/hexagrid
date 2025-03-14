@@ -44,6 +44,14 @@ export class MetricsSystem {
         this.balancerRating = 0;    // How well chaos/order is balanced
         this.efficientRating = 0;   // How efficiently resources are used
         
+        // Level progression metrics
+        this.levelProgressionMetrics = {
+            stabilizedTiles: 0,         // Number of significantly stabilized tiles in current level
+            energyGatheredFromTiles: 0, // Energy gathered specifically from tiles in current level
+            initialChaos: 0.8,          // Initial chaos level for current level
+            finalChaos: 0.8             // Calculated chaos for next level
+        };
+        
         // Achievement tracking
         this.achievements = {};
         
@@ -115,6 +123,16 @@ export class MetricsSystem {
         // Turn tracking
         this._registeredEvents.push(
             eventSystem.on(EventTypes.TURN_END.standard, this.onTurnEnd.bind(this))
+        );
+        
+        // Level transitions
+        this._registeredEvents.push(
+            eventSystem.on(EventTypes.LEVEL_COMPLETED.standard, this.onLevelCompleted.bind(this))
+        );
+        
+        // Register for energy gathered from tiles event
+        this._registeredEvents.push(
+            eventSystem.on('resource:energy:gathered:tile', this.onEnergyGatheredFromTile.bind(this))
         );
         
         // Evolution
@@ -225,7 +243,15 @@ export class MetricsSystem {
      * @param {object} data - Event data
      */
     onStabilizeComplete(data) {
+        // Track total stabilizations
         this.stabilizationsPerformed++;
+        
+        // Track significant stabilizations for progression formula
+        if (data.chaosDelta && data.chaosDelta <= -0.2) {
+            // Significant chaos reduction (20% or more)
+            this.levelProgressionMetrics.stabilizedTiles++;
+            console.log(`Significant stabilization detected. Total: ${this.levelProgressionMetrics.stabilizedTiles}`);
+        }
     }
     
     /**
@@ -273,9 +299,16 @@ export class MetricsSystem {
         
         this.netChaosChange = this.chaosCreated - this.chaosReduced;
         
+        // Determine the system balance from the event data
+        // Looking for the most specific chaos value first
+        const systemBalance = 
+            (data.newChaos !== undefined) ? data.newChaos : 
+            (data.chaos !== undefined) ? data.chaos : 
+            (data.systemChaos !== undefined) ? data.systemChaos : 0.5;
+        
         // Check balance rating (how close to 50/50)
-        const systemBalance = data.newChaos || 0.5; // Default to 0.5 if not provided
-        this.balancerRating = 1 - Math.abs(0.5 - systemBalance) * 2; // 1 at perfect balance, 0 at extreme
+        // 1.0 = perfect balance (exactly 50/50), 0.0 = extreme imbalance (0/100 or 100/0)
+        this.balancerRating = 1 - Math.abs(0.5 - systemBalance) * 2;
         
         // Update balancer achievement
         this.achievements.balancer.progress = this.balancerRating;
@@ -415,6 +448,57 @@ export class MetricsSystem {
     }
     
     /**
+     * Handle energy gathered specifically from tiles
+     * @param {object} data - Event data
+     */
+    onEnergyGatheredFromTile(data) {
+        if (data && data.amount) {
+            this.levelProgressionMetrics.energyGatheredFromTiles += data.amount;
+            console.log(`Energy gathered from tile: ${data.amount}. Total: ${this.levelProgressionMetrics.energyGatheredFromTiles}`);
+        }
+    }
+    
+    /**
+     * Handle level completion event
+     * @param {object} data - Event data
+     */
+    onLevelCompleted(data) {
+        // Increment levels completed counter
+        this.levelsCompleted++;
+        
+        // Record final chaos for current level and initial chaos for next level
+        if (data.chaosNext !== undefined) {
+            this.levelProgressionMetrics.finalChaos = data.chaosNext;
+        }
+        
+        console.log(`Level ${this.levelsCompleted} completed. Final metrics:`, 
+                   `Stabilized Tiles: ${this.levelProgressionMetrics.stabilizedTiles}`,
+                   `Energy Gathered: ${this.levelProgressionMetrics.energyGatheredFromTiles}`);
+        
+        // Save level metrics (using existing method)
+        this.saveLevelMetrics(data.gameStage || 'early');
+    }
+    
+    /**
+     * Reset level progression metrics for a new level
+     * @param {number} initialChaos - Initial chaos level for the new level
+     */
+    resetLevelProgressionMetrics(initialChaos) {
+        // Store current final chaos as the next level's initial chaos
+        const nextInitialChaos = this.levelProgressionMetrics.finalChaos;
+        
+        // Reset metrics
+        this.levelProgressionMetrics = {
+            stabilizedTiles: 0,
+            energyGatheredFromTiles: 0,
+            initialChaos: nextInitialChaos,
+            finalChaos: nextInitialChaos
+        };
+        
+        console.log(`Reset level progression metrics. Initial chaos: ${this.levelProgressionMetrics.initialChaos}`);
+    }
+    
+    /**
      * Get all current metrics
      * @returns {object} The metrics data
      */
@@ -455,6 +539,12 @@ export class MetricsSystem {
                 balancerRating: this.balancerRating,
                 efficientRating: this.efficientRating
             },
+            levelProgression: {
+                stabilizedTiles: this.levelProgressionMetrics.stabilizedTiles,
+                energyGatheredFromTiles: this.levelProgressionMetrics.energyGatheredFromTiles,
+                initialChaos: this.levelProgressionMetrics.initialChaos,
+                finalChaos: this.levelProgressionMetrics.finalChaos
+            },
             achievements: this.achievements
         };
     }
@@ -485,6 +575,9 @@ export class MetricsSystem {
         this.currentGameStage = 'early';
         this.levelStartTime = Date.now();
         this.totalPlayTime = 0;
+        
+        // Reset level progression metrics
+        this.resetLevelProgressionMetrics(0.8); // Default to 0.8 chaos for early game
         
         // Reset achievements
         this.initAchievements();
@@ -552,14 +645,17 @@ export class MetricsSystem {
             balancerRating: this.balancerRating,
             efficientRating: this.efficientRating,
             
+            // Level progression metrics
+            levelProgressionMetrics: { ...this.levelProgressionMetrics },
+            
             // Achievements
             achievements: JSON.parse(JSON.stringify(this.achievements))
         };
     }
     
     /**
-     * Set metrics data from saved data
-     * @param {Object} data - Data from getData()
+     * Set metrics data from saved state
+     * @param {Object} data - Metrics data from getData()
      */
     setData(data) {
         if (!data) return;

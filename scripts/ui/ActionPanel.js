@@ -6,6 +6,7 @@ import { TileComponent } from '../components/TileComponent.js';
 import { PlayerComponent } from '../components/PlayerComponent.js';
 import { entityManager } from '../core/EntityManager.js';
 import { EventTypes } from '../core/EventTypes.js';
+import { eventMediator } from '../core/EventMediator.js';
 
 export class ActionPanel {
     /**
@@ -358,21 +359,52 @@ export class ActionPanel {
     /**
      * Update system balance
      * @param {number} chaosDelta - Change in chaos level (-1 to 1) 
+     * @param {string} sourceAction - The action that caused the change (optional)
      */
-    updateSystemBalance(chaosDelta) {
-        if (typeof chaosDelta !== 'number') {
-            console.error("ActionPanel: chaosDelta must be a number");
+    updateSystemBalance(chaosDelta, sourceAction = null) {
+        if (!this.grid) return;
+        
+        console.log(`ActionPanel: Current balance before update: ${this.grid.getSystemBalance().chaos.toFixed(3)} Chaos / ${this.grid.getSystemBalance().order.toFixed(3)} Order`);
+        
+        // Skip tiny changes that wouldn't actually affect the system
+        if (typeof chaosDelta !== 'number' || Math.abs(chaosDelta) < 0.001) {
             return;
         }
         
-        if (this.grid) {
-            // Apply reduced effect but ensure it's still significant
-            // Change from dividing by 10 to dividing by 5 for a more noticeable impact
-            const scaledDelta = chaosDelta / 5;
-            console.log(`ActionPanel: Updating system balance with scaled delta: ${scaledDelta} (original: ${chaosDelta})`);
-            this.grid.updateSystemBalance(scaledDelta);
+        // Apply scaling based on the action type
+        let scalingFactor = 1;
+        
+        if (sourceAction === 'stabilize') {
+            // Changed from 150 to 15 for testing - stabilize has less impact on system balance
+            scalingFactor = 15; 
+            console.log(`DEBUG - Stabilize: Original chaos delta: ${chaosDelta}, scaled by ${scalingFactor}`);
+        } else if (sourceAction === 'sense') {
+            // Sense has minor impact on system balance
+            scalingFactor = 20;
+        } else if (sourceAction === 'interact') {
+            // Interact has moderate impact on system balance
+            scalingFactor = 10;
+        } else if (sourceAction === 'move') {
+            // Move has minimal impact
+            scalingFactor = 30;
         } else {
-            console.error("ActionPanel: Grid not available. Could not update system balance.");
+            // Default scaling
+            scalingFactor = 5;
+        }
+        
+        // Apply scaling
+        const effectiveDelta = chaosDelta / scalingFactor;
+        
+        console.log(`ActionPanel: Updating system balance by ${effectiveDelta.toFixed(4)} (original: ${chaosDelta.toFixed(4)}, scaled by ${scalingFactor})`);
+        
+        // Update the grid's system balance
+        this.grid.updateSystemBalance(effectiveDelta, sourceAction);
+        
+        // Verify the binary duality principle (chaos + order = 1)
+        const newBalance = this.grid.getSystemBalance();
+        const sum = newBalance.chaos + newBalance.order;
+        if (Math.abs(sum - 1.0) > 0.001) {
+            console.error(`Balance error: chaos (${newBalance.chaos}) + order (${newBalance.order}) = ${sum}, not 1.0`);
         }
     }
 
@@ -512,7 +544,7 @@ export class ActionPanel {
         
         if (success) {
             // Update system balance (move has no chaos effect)
-            this.updateSystemBalance(0);
+            this.updateSystemBalance(0, 'move');
             
             // Emit standardized event
             eventSystem.emitStandardized(
@@ -558,7 +590,7 @@ export class ActionPanel {
         
         // Update system balance
         const chaosDelta = 0.05; // Sensing increases chaos slightly
-        this.updateSystemBalance(chaosDelta);
+        this.updateSystemBalance(chaosDelta, 'sense');
         
         // Emit standardized event
         eventSystem.emitStandardized(
@@ -608,6 +640,22 @@ export class ActionPanel {
                 player.addEnergy(energyRestored);
                 interactionResult = `Restored ${energyRestored} energy`;
                 chaosDelta = 0.1; // Interacting with energy increases chaos
+                
+                // Emit standardized event for energy gathered from tile
+                eventSystem.emitStandardized(
+                    EventTypes.ENERGY_GATHERED_FROM_TILE.legacy,
+                    EventTypes.ENERGY_GATHERED_FROM_TILE.standard,
+                    {
+                        player: player,
+                        tileComponent: tileComponent,
+                        row: row,
+                        col: col,
+                        amount: energyRestored,
+                        timestamp: Date.now(),
+                        isStandardized: true
+                    },
+                    EventTypes.ENERGY_GATHERED_FROM_TILE.deprecation
+                );
                 break;
                 
             case 'chaotic':
@@ -649,7 +697,7 @@ export class ActionPanel {
         }
         
         // Update system balance
-        this.updateSystemBalance(chaosDelta);
+        this.updateSystemBalance(chaosDelta, 'interact');
         
         // Emit standardized event
         eventSystem.emitStandardized(
@@ -691,6 +739,7 @@ export class ActionPanel {
         
         // Skip if chaos is already at minimum
         if (currentChaos <= 0) {
+            this.showFeedback(`Tile at (${row}, ${col}) is already fully stabilized.`, "warning", 2000, false, 'action-stabilize');
             return false;
         }
         
@@ -710,65 +759,174 @@ export class ActionPanel {
         // Apply stabilization with a minimum reduction of 10%
         const chaosDelta = -Math.max(currentChaos * stabilizationPower, 0.1);
         
-        // Update tile chaos
-        tileComponent.updateChaosLevel(chaosDelta);
+        console.log(`ActionPanel: Stabilizing tile at (${row}, ${col}) - Current chaos: ${currentChaos.toFixed(3)}, Delta: ${chaosDelta.toFixed(3)}`);
         
-        // Update system balance
-        this.updateSystemBalance(chaosDelta);
+        // Use the Event Mediator to handle the stabilize action
+        const result = eventMediator.handleStabilizeAction({
+            tileComponent: tileComponent,
+            chaosDelta: chaosDelta,
+            player: player,
+            row: row,
+            col: col,
+            grid: this.grid
+        });
         
-        // Format percentage for feedback
-        const reductionPercent = Math.round(-chaosDelta * 100);
-        
-        // Emit standardized event
-        eventSystem.emitStandardized(
-            EventTypes.ACTION_COMPLETE_STABILIZE.legacy,
-            EventTypes.ACTION_COMPLETE_STABILIZE.standard,
-            {
-                player: player,
-                tileComponent: tileComponent,
-                row: row,
-                col: col,
-                chaosDelta: chaosDelta,
-                reductionPercent: reductionPercent,
-                timestamp: Date.now(),
-                isStandardized: true
+        if (result.success) {
+            // Create an informative feedback message using the result data
+            let feedbackMessage = `Stabilized tile at (${row}, ${col}): Chaos reduced by ${result.reductionPercent}%`;
+            
+            // Add world balance information if available
+            if (Math.abs(result.systemBalanceChange) > 0.0001) {
+                const worldChangePercent = Math.abs(Math.round(result.systemBalanceChange * 1000) / 10);
+                
+                // Use one decimal place precision instead of rounding to integers
+                const worldChaosPercent = (result.systemBalanceAfter * 100).toFixed(1);
+                const worldOrderPercent = ((1 - result.systemBalanceAfter) * 100).toFixed(1);
+                
+                // Show both the current balance and the change
+                feedbackMessage += `. World balance: ${worldChaosPercent}% Chaos / ${worldOrderPercent}% Order`;
+                
+                // Add the actual balance change if it's significant enough to show
+                if (worldChangePercent >= 0.1) { // If at least 0.1% change
+                    feedbackMessage += ` (${worldChangePercent > 0 ? '+' : '-'}${worldChangePercent}%)`;
+                }
             }
-        );
-        
-        // Show feedback
-        this.showFeedback(`Stabilized tile at (${row}, ${col}): Chaos reduced by ${reductionPercent}%`, "success", 2000, true, 'action-stabilize');
-        
-        return true;
+            
+            // Show the enhanced feedback message
+            this.showFeedback(feedbackMessage, "success", 2500, true, 'action-stabilize');
+            
+            return true;
+        } else {
+            // Show error feedback
+            this.showFeedback(`Failed to stabilize tile: ${result.error || 'Unknown error'}`, "error", 2000, true, 'action-error');
+            return false;
+        }
     }
     
     /**
      * Update button states based on player state
      */
     updateButtonStates() {
+        console.log("ActionPanel: Updating button states");
+        
         // Get player component
         const playerEntity = this.entityManager ? this.entityManager.getEntitiesByTag('player')[0] : null;
-        if (!playerEntity) return;
+        if (!playerEntity) {
+            console.warn("ActionPanel: No player entity found when updating button states");
+            return;
+        }
         
         const playerComponent = playerEntity.getComponent(PlayerComponent);
-        if (!playerComponent) return;
+        if (!playerComponent) {
+            console.warn("ActionPanel: Player entity has no PlayerComponent");
+            return;
+        }
+        
+        // Log current player resources for debugging
+        console.log(`ActionPanel: Player resources - Energy: ${playerComponent.energy}, Movement: ${playerComponent.movementPoints}`);
         
         // Remove active class from all buttons
         for (const button of Object.values(this.buttons)) {
             if (button) button.classList.remove('active');
         }
         
-        // Add active class to current action
+        // Add active class to current action button
         if (playerComponent.currentAction && this.buttons[playerComponent.currentAction]) {
             this.buttons[playerComponent.currentAction].classList.add('active');
         }
         
-        // Disable buttons if player has no movement points
+        // Check player resources
         const hasMovementPoints = playerComponent.movementPoints > 0;
+        const hasEnergy = playerComponent.energy > 0;
         
-        if (this.buttons.move) this.buttons.move.disabled = !hasMovementPoints;
-        if (this.buttons.sense) this.buttons.sense.disabled = !hasMovementPoints;
-        if (this.buttons.interact) this.buttons.interact.disabled = !hasMovementPoints;
-        if (this.buttons.stabilize) this.buttons.stabilize.disabled = !hasMovementPoints;
+        // Update move button - requires movement points
+        if (this.buttons.move) {
+            this.buttons.move.disabled = !hasMovementPoints;
+            
+            // Add explanatory tooltip if disabled
+            if (!hasMovementPoints) {
+                this.buttons.move.title = "Requires movement points";
+            } else {
+                this.buttons.move.title = "Move to an adjacent tile";
+            }
+        }
+        
+        // Determine costs for other actions at the current player position
+        let senseEnergyCost = 1;
+        let interactEnergyCost = 1;
+        let stabilizeEnergyCost = 1;
+        
+        // Get current tile costs if player is on a valid tile
+        const currentTile = this.getTileAtPlayerPosition(playerComponent);
+        if (currentTile) {
+            const tileComponent = currentTile.getComponent(TileComponent);
+            if (tileComponent) {
+                senseEnergyCost = tileComponent.getActionCost('sense');
+                interactEnergyCost = tileComponent.getActionCost('interact');
+                stabilizeEnergyCost = tileComponent.getActionCost('stabilize');
+            }
+        }
+        
+        // Update sense button - requires energy
+        if (this.buttons.sense) {
+            const canSense = hasEnergy && playerComponent.energy >= senseEnergyCost;
+            this.buttons.sense.disabled = !canSense;
+            
+            if (!hasEnergy) {
+                this.buttons.sense.title = "Requires energy";
+            } else if (!canSense) {
+                this.buttons.sense.title = `Not enough energy (cost: ${senseEnergyCost})`;
+            } else {
+                this.buttons.sense.title = `Sense the environment (cost: ${senseEnergyCost} energy)`;
+            }
+        }
+        
+        // Update interact button - requires energy
+        if (this.buttons.interact) {
+            const canInteract = hasEnergy && playerComponent.energy >= interactEnergyCost;
+            this.buttons.interact.disabled = !canInteract;
+            
+            if (!hasEnergy) {
+                this.buttons.interact.title = "Requires energy";
+            } else if (!canInteract) {
+                this.buttons.interact.title = `Not enough energy (cost: ${interactEnergyCost})`;
+            } else {
+                this.buttons.interact.title = `Interact with tile (cost: ${interactEnergyCost} energy)`;
+            }
+        }
+        
+        // Update stabilize button - requires energy
+        if (this.buttons.stabilize) {
+            const canStabilize = hasEnergy && playerComponent.energy >= stabilizeEnergyCost;
+            this.buttons.stabilize.disabled = !canStabilize;
+            
+            if (!hasEnergy) {
+                this.buttons.stabilize.title = "Requires energy";
+            } else if (!canStabilize) {
+                this.buttons.stabilize.title = `Not enough energy (cost: ${stabilizeEnergyCost})`;
+            } else {
+                this.buttons.stabilize.title = `Stabilize tile chaos (cost: ${stabilizeEnergyCost} energy)`;
+            }
+        }
+    }
+    
+    /**
+     * Get tile entity at player position
+     * @param {PlayerComponent} playerComponent - The player component
+     * @returns {Entity|null} The tile entity at player position
+     * @private
+     */
+    getTileAtPlayerPosition(playerComponent) {
+        // Make sure we have a grid reference
+        if (!this.grid) return null;
+        
+        // Make sure player component has valid position
+        if (!playerComponent || typeof playerComponent.row !== 'number' || typeof playerComponent.col !== 'number') {
+            return null;
+        }
+        
+        // Get tile at player position
+        return this.grid.getTileAt(playerComponent.row, playerComponent.col);
     }
     
     /**

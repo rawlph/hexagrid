@@ -275,6 +275,16 @@ export const EventTypes = {
             version: '2.0.0',
             message: 'Use system:turn:initialized instead. The legacy turnSystemInitialized event will be removed in v2.0'
         }
+    },
+    
+    // Resource events
+    ENERGY_GATHERED_FROM_TILE: {
+        legacy: 'energyGatheredFromTile',
+        standard: 'resource:energy:gathered:tile',
+        deprecation: {
+            version: '2.0.0',
+            message: 'Use resource:energy:gathered:tile instead. The legacy energyGatheredFromTile event will be removed in v2.0'
+        }
     }
 };
 

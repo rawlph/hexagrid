@@ -12,6 +12,7 @@ import { TurnSystem } from './TurnSystem.js';
 import { entityManager, Entity } from './EntityManager.js';
 import { eventSystem } from './EventSystem.js';
 import { EventTypes } from './EventTypes.js';
+import { eventMediator } from './EventMediator.js';
 
 export class Game {
     /**
@@ -103,6 +104,15 @@ export class Game {
             this.turnSystem = new TurnSystem(gameStage, { grid: this.grid });
             this.evolutionSystem = new EvolutionSystem(); // Initialize evolution system
             this.evolutionSystem.init(); // Make sure to call init
+            
+            // Initialize the event mediator
+            // Enable debug mode in development to help trace event flows
+            if (this.config.debugMode) {
+                eventMediator.setDebugMode(true);
+                console.log('Event Mediator initialized with debug mode enabled');
+            } else {
+                console.log('Event Mediator initialized');
+            }
             
             // Initialize the grid with default tiles
             this.grid.init();
@@ -2396,6 +2406,13 @@ export class Game {
         // Restore metrics data if needed
         if (metricsData && this.metricsSystem) {
             this.metricsSystem.setData(metricsData);
+            
+            // Reset level progression metrics with the new initial chaos
+            this.metricsSystem.resetLevelProgressionMetrics(newBalance.chaos);
+            
+            // Update the metrics system with the new level's balance
+            this.metricsSystem.levelProgressionMetrics.initialChaos = newBalance.chaos;
+            this.metricsSystem.levelProgressionMetrics.finalChaos = newBalance.chaos;
         }
         
         // Reset current level evolution points in the TurnSystem
@@ -2423,13 +2440,34 @@ export class Game {
                 if (playerComponent) {
                     playerComponent.setAction(null);
                     
-                    // Update UI to reflect no selected action
-                    if (window.actionPanel) {
-                        window.actionPanel.updateButtonStates();
-                    }
+                    // Ensure player has full movement points and energy for the new level
+                    playerComponent.resetMovementPoints();
+                    playerComponent.resetEnergy();
+                    
+                    console.log(`Player resources reset for new level: Movement: ${playerComponent.movementPoints}, Energy: ${playerComponent.energy}`);
+                    
+                    // Emit events to update UI
+                    eventSystem.emitStandardized(
+                        EventTypes.PLAYER_MOVEMENT_POINTS_CHANGED.legacy,
+                        EventTypes.PLAYER_MOVEMENT_POINTS_CHANGED.standard,
+                        {
+                            player: playerComponent,
+                            movementPoints: playerComponent.movementPoints,
+                            isStandardized: true
+                        }
+                    );
+                    
+                    eventSystem.emitStandardized(
+                        EventTypes.PLAYER_ENERGY_CHANGED.legacy,
+                        EventTypes.PLAYER_ENERGY_CHANGED.standard,
+                        {
+                            player: playerComponent,
+                            energy: playerComponent.energy,
+                            isStandardized: true
+                        }
+                    );
                     
                     // Explicitly update UI with current player stats
-                    // This ensures the UI is updated immediately after level transition
                     if (this.uiManager) {
                         this.uiManager.updateResourceDisplay('energy', {
                             energy: playerComponent.energy
@@ -2438,6 +2476,17 @@ export class Game {
                         this.uiManager.updateResourceDisplay('movement', {
                             movementPoints: playerComponent.movementPoints
                         });
+                    }
+                    
+                    // Ensure ActionPanel is properly initialized and updated
+                    if (window.actionPanel) {
+                        console.log("Updating ActionPanel button states after level transition");
+                        window.actionPanel.updateButtonStates();
+                    } else if (this.uiManager && this.uiManager.actionPanel) {
+                        console.log("Initializing ActionPanel through UIManager after level transition");
+                        this.uiManager.actionPanel.updateButtonStates();
+                    } else {
+                        console.warn("ActionPanel not available after level transition");
                     }
                 }
             } else {
@@ -2557,52 +2606,83 @@ export class Game {
         // Get current game stage
         const currentStage = this.turnSystem?.gameStage || 'early';
         
-        // Calculate point ratios
-        const total = data.totalPoints || 1; // Avoid division by zero
-        const chaosRatio = data.chaosPoints / total;
-        const orderRatio = data.orderPoints / total;
+        // Access the metrics system for progression data
+        if (!this.metricsSystem) {
+            console.warn('Game: MetricsSystem not available, using default progression values');
+            return this._getDefaultBalanceForStage(currentStage, data.levelNumber);
+        }
         
-        // Set progression based on game stage
+        console.log('Calculating next level balance using progression formula');
+        
+        // Get metrics for the progression formula
+        const S = this.metricsSystem.levelProgressionMetrics.stabilizedTiles;
+        const E = this.metricsSystem.levelProgressionMetrics.energyGatheredFromTiles;
+        
+        // Get current chaos value
+        const currentChaos = this.metricsSystem.levelProgressionMetrics.initialChaos;
+        
+        // Define constants for the chaos progression formula
+        const k = 10;   // Energy scaling constant
+        const alpha = 0.05;  // Main tuning factor
+        
+        // Beta varies by game stage - pull toward balance in early game only
+        let beta = 0;
         if (currentStage === 'early') {
-            // Early game: Start with high chaos, gradually reduce toward balance
-            // High chaos values (0.8 - 0.6) for primordial state
-            if (data.levelNumber === undefined || data.levelNumber < 2) {
-                // First level - high chaos (80/20)
-                return {
-                    chaos: 0.8,
-                    order: 0.2
-                };
-            } else if (data.levelNumber < 4) {
-                // Levels 2-3: Slightly less chaos (70/30)
-                return {
-                    chaos: 0.7,
-                    order: 0.3
-                };
+            beta = 0.1;  // Pull toward 50/50 in early game
+        }
+        
+        // Calculate player impact: S - E/k
+        const playerImpact = S - (E / k);
+        
+        // Calculate balance pull: β(0.5 - C_current)
+        const balancePull = beta * (0.5 - currentChaos);
+        
+        // Apply formula: C_next = C_current - α(S - E/k) + β(0.5 - C_current)
+        let nextChaos = currentChaos - (alpha * playerImpact) + balancePull;
+        
+        // Ensure chaos stays within valid range
+        nextChaos = Math.max(0, Math.min(1, nextChaos));
+        
+        console.log(`Level progression formula results:
+        - Current chaos: ${currentChaos.toFixed(2)}
+        - Stabilized tiles (S): ${S}
+        - Energy gathered (E): ${E}
+        - Player impact (S - E/k): ${playerImpact.toFixed(2)}
+        - Balance pull (β(0.5 - C_current)): ${balancePull.toFixed(2)}
+        - Next level chaos: ${nextChaos.toFixed(2)}`);
+        
+        // Store in metrics system for future reference
+        this.metricsSystem.levelProgressionMetrics.finalChaos = nextChaos;
+        
+        return {
+            chaos: nextChaos,
+            order: 1 - nextChaos
+        };
+    }
+    
+    /**
+     * Get default balance values based on game stage
+     * @param {string} gameStage - Current game stage
+     * @param {number} levelNumber - Current level number
+     * @returns {Object} Default balance values
+     * @private
+     */
+    _getDefaultBalanceForStage(gameStage, levelNumber) {
+        // Original fixed progression logic
+        if (gameStage === 'early') {
+            if (levelNumber === undefined || levelNumber < 2) {
+                return { chaos: 0.8, order: 0.2 };
+            } else if (levelNumber < 4) {
+                return { chaos: 0.7, order: 0.3 };
             } else {
-                // Levels 4+: Approaching balance (60/40)
-                return {
-                    chaos: 0.6, 
-                    order: 0.4
-                };
+                return { chaos: 0.6, order: 0.4 };
             }
-        } else if (currentStage === 'mid') {
-            // Mid game: Balance (50/50)
-            return {
-                chaos: 0.5,
-                order: 0.5
-            };
-        } else if (currentStage === 'late') {
-            // Late game: More order than chaos (30/70)
-            return {
-                chaos: 0.3,
-                order: 0.7
-            };
+        } else if (gameStage === 'mid') {
+            return { chaos: 0.5, order: 0.5 };
+        } else if (gameStage === 'late') {
+            return { chaos: 0.3, order: 0.7 };
         } else {
-            // Default case - use early game profile
-            return {
-                chaos: 0.8,
-                order: 0.2
-            };
+            return { chaos: 0.8, order: 0.2 };
         }
     }
     

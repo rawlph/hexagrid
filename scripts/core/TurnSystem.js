@@ -320,31 +320,63 @@ export class TurnSystem {
     }
     
     /**
-     * Handle tile chaos changes
-     * @param {Object} data - Event data
+     * Handle tile chaos changed event
+     * @param {object} data - Event data
      */
     onTileChaosChanged(data) {
-        // Update system balance and emit event
-        const { systemChaos, systemOrder } = data;
+        // Only proceed if we have valid data
+        if (!data) {
+            console.warn("TurnSystem.onTileChaosChanged: Missing data");
+            return;
+        }
+        
+        // If this event was triggered by a stabilize action, we don't need
+        // to re-emit system balance changes as ActionPanel already handles this
+        if (data.sourceAction === 'stabilize') {
+            // We still need to check victory conditions
+            const systemChaos = this.grid ? this.grid.getSystemBalance().chaos : null;
+            if (systemChaos !== null) {
+                this.checkVictoryConditions(systemChaos);
+            }
+            return;
+        }
+        
+        // Get the tile's chaos data - we don't use this directly for system balance
+        // as Grid.getSystemBalance() is the single source of truth
+        const tileChaos = data.newChaos;
+        const tileChaosDelta = data.chaosDelta;
+        
+        // Skip if we don't have the grid reference
+        if (!this.grid) return;
+        
+        // Get current system balance from the grid (single source of truth)
+        const currentBalance = this.grid.getSystemBalance();
+        const systemChaos = currentBalance.chaos;
+        
+        // No need to update system chaos based on tile changes anymore
+        // That's handled by ActionPanel's updateSystemBalance
+        
+        // Check for victory conditions
+        this.checkVictoryConditions(systemChaos);
+    }
+    
+    /**
+     * Check if victory conditions are met
+     * @param {number} systemChaos - Current system chaos
+     * @private
+     */
+    checkVictoryConditions(systemChaos) {
+        // Enforce binary duality - order is always 1 - chaos
+        const systemOrder = 1 - systemChaos;
         
         // Check for balance changes that might lead to victory/defeat
         const chaosDiff = Math.abs(systemChaos - this.targetChaos);
         const orderDiff = Math.abs(systemOrder - this.targetOrder);
         
-        // Emit balance changed event
-        eventSystem.emitStandardized(
-            EventTypes.SYSTEM_BALANCE_CHANGED.legacy,
-            EventTypes.SYSTEM_BALANCE_CHANGED.standard,
-            {
-                chaos: systemChaos,
-                order: systemOrder,
-                targetChaos: this.targetChaos,
-                targetOrder: this.targetOrder,
-                chaosDiff,
-                orderDiff,
-                isBalanced: chaosDiff <= this.victoryThreshold && orderDiff <= this.victoryThreshold
-            }
-        );
+        // Log if we're close to victory
+        if (chaosDiff <= this.victoryThreshold && orderDiff <= this.victoryThreshold) {
+            console.log(`TurnSystem: System balance close to target (diff: ${chaosDiff.toFixed(3)}, threshold: ${this.victoryThreshold})`);
+        }
     }
     
     /**
