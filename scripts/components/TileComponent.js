@@ -78,9 +78,8 @@ export class TileComponent extends Component {
      */
     onEnable() {
         // Update visual state when enabled
-        if (this.element) {
-            this.element.classList.remove('disabled');
-        }
+        this.enabled = true;
+        this.updateVisualState();
     }
     
     /**
@@ -88,9 +87,8 @@ export class TileComponent extends Component {
      */
     onDisable() {
         // Update visual state when disabled
-        if (this.element) {
-            this.element.classList.add('disabled');
-        }
+        this.enabled = false;
+        this.updateVisualState();
     }
     
     /**
@@ -198,12 +196,36 @@ export class TileComponent extends Component {
     
     /**
      * Mark tile as explored
+     * @param {string} sourceAction - Action that caused the exploration (optional)
      * @returns {number|boolean} Energy value if this is an energy tile, false if already explored
      */
-    markExplored() {
+    markExplored(sourceAction = null) {
         if (this.explored) return false;
         
         this.explored = true;
+        
+        // Update visual state to remove the 'unexplored' class
+        this.updateVisualState();
+        
+        // Emit tile explored event
+        const eventSystem = window.eventSystem || (window.game && window.game.eventSystem);
+        if (eventSystem && eventSystem.emitStandardized) {
+            eventSystem.emitStandardized(
+                'tileExplored', // Legacy event name
+                'tile:explored', // Standard event name
+                {
+                    row: this.row,
+                    col: this.col,
+                    wasExplored: false,
+                    isExplored: true,
+                    tileComponent: this,
+                    tileInfo: this.getData(),
+                    type: this.type,
+                    sourceAction: sourceAction,
+                    isStandardized: true
+                }
+            );
+        }
         
         // Return energy value if this is an energy tile
         return this.type === 'energy' ? this.energyValue : 0;
@@ -212,9 +234,10 @@ export class TileComponent extends Component {
     /**
      * Change the tile type
      * @param {string} newType - New tile type
+     * @param {string} sourceAction - Action that caused the type change (optional)
      * @returns {boolean} True if the type was changed, false if it was already the same type
      */
-    changeType(newType) {
+    changeType(newType, sourceAction = null) {
         if (!newType) {
             console.error('TileComponent: Cannot change to undefined type');
             return false;
@@ -222,8 +245,30 @@ export class TileComponent extends Component {
         
         if (this.type === newType) return false;
         
+        const oldType = this.type;
         this.type = newType;
         this.initializeByType();
+        
+        // Update visual state to reflect the new type
+        this.updateVisualState();
+        
+        // Emit tile type changed event
+        const eventSystem = window.eventSystem || (window.game && window.game.eventSystem);
+        if (eventSystem && eventSystem.emitStandardized) {
+            eventSystem.emitStandardized(
+                'tileTypeChanged', // Legacy event name
+                'tile:type:changed', // Standard event name
+                {
+                    row: this.row,
+                    col: this.col,
+                    oldType: oldType,
+                    newType: this.type,
+                    tile: this,
+                    sourceAction: sourceAction,
+                    isStandardized: true
+                }
+            );
+        }
         
         return true;
     }
@@ -354,5 +399,36 @@ export class TileComponent extends Component {
         }, 1000);
         
         return true;
+    }
+    
+    /**
+     * Update the visual state of the tile based on its properties
+     * Called whenever the tile's properties change and the visual needs to be updated
+     */
+    updateVisualState() {
+        if (!this.element) {
+            console.warn('TileComponent: Cannot update visual state - element is not defined');
+            return;
+        }
+        
+        // Clear existing type classes
+        this.element.classList.remove('normal', 'energy', 'chaotic', 'orderly', 'obstacle');
+        
+        // Add the current type class
+        this.element.classList.add(this.type);
+        
+        // Update explored/unexplored state
+        if (this.explored) {
+            this.element.classList.remove('unexplored');
+        } else {
+            this.element.classList.add('unexplored');
+        }
+        
+        // Update enabled/disabled state
+        if (this.enabled) {
+            this.element.classList.remove('disabled');
+        } else {
+            this.element.classList.add('disabled');
+        }
     }
 } 

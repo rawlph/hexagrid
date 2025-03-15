@@ -6,11 +6,19 @@ class HexUtils {
      * Calculates the pixel coordinates for a hex cell at the given grid position
      * @param {number} row - The row in the grid
      * @param {number} col - The column in the grid
-     * @param {number} hexWidth - The width of a hex cell in pixels
-     * @param {number} hexHeight - The height of a hex cell in pixels
+     * @param {number} hexWidth - The width of a hex cell in pixels (defaults to CSS value)
+     * @param {number} hexHeight - The height of a hex cell in pixels (calculated from width if not provided)
      * @returns {Object} The x and y coordinates
      */
-    static getHexPosition(row, col, hexWidth = 70, hexHeight = 80) {
+    static getHexPosition(row, col, hexWidth = null, hexHeight = null) {
+        // Use CSS variables if dimensions not provided
+        if (!hexWidth || !hexHeight) {
+            const computedStyle = getComputedStyle(document.documentElement);
+            hexWidth = parseInt(computedStyle.getPropertyValue('--tile-size') || '80', 10);
+            const hexHeightRatio = parseFloat(computedStyle.getPropertyValue('--tile-height-ratio') || '1.15');
+            hexHeight = hexWidth * hexHeightRatio;
+        }
+        
         // Calculate spacing based on hex dimensions with adjusted values
         const horizSpacing = hexWidth * 1.00; // Increased from 0.75 to prevent overlap
         const vertSpacing = hexHeight * 0.74; // Decreased from 0.865 to reduce gap between rows

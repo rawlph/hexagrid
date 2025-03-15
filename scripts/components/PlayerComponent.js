@@ -105,19 +105,27 @@ export class PlayerComponent extends Component {
     createPlayerMarker() {
         console.log('Creating player marker');
         
+        // First check if there's already a player marker in the DOM
+        // This ensures we're maintaining a single source of truth
+        const existingMarker = document.querySelector('.player-marker');
+        if (existingMarker) {
+            console.log('Found existing player marker, reusing it');
+            this.markerElement = existingMarker;
+            return;
+        }
+        
         // Create marker if it doesn't exist yet
-        if (!this.markerElement) {
-            this.markerElement = document.createElement('div');
-            this.markerElement.className = 'player-marker';
-            this.markerElement.textContent = 'P';
-            
-            // Add to grid container - this will be positioned absolutely
-            const gridContainer = document.getElementById('grid-container');
-            if (gridContainer) {
-                gridContainer.appendChild(this.markerElement);
-            } else {
-                console.error('Grid container not found');
-            }
+        this.markerElement = document.createElement('div');
+        this.markerElement.className = 'player-marker';
+        this.markerElement.textContent = 'P';
+        this.markerElement.dataset.entityId = this.entity.id; // Add entity ID to marker for identification
+        
+        // Add to grid container - this will be positioned absolutely
+        const gridContainer = document.getElementById('grid-container');
+        if (gridContainer) {
+            gridContainer.appendChild(this.markerElement);
+        } else {
+            console.error('Grid container not found');
         }
     }
     
@@ -208,11 +216,18 @@ export class PlayerComponent extends Component {
      * Update marker visual position
      */
     updateMarkerPosition() {
-        // Ensure we have a marker
+        // Ensure we have a marker - first try to get the reference if we lost it
         if (!this.markerElement) {
-            console.warn('Player marker element not found, creating it');
-            this.createPlayerMarker();
-            if (!this.markerElement) return;
+            // Try to find the existing marker by entity ID before creating a new one
+            const existingMarker = document.querySelector(`.player-marker[data-entity-id="${this.entity.id}"]`);
+            if (existingMarker) {
+                console.log('Reconnected to existing player marker');
+                this.markerElement = existingMarker;
+            } else {
+                console.warn('Player marker element not found, creating it');
+                this.createPlayerMarker();
+                if (!this.markerElement) return;
+            }
         }
         
         // Find the current tile element

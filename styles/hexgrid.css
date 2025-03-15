@@ -3,6 +3,38 @@
  * Styling for hex grid and tiles
  */
 
+:root {
+    /* Tile appearance variables */
+    --tile-size: 80px;
+    --tile-height-ratio: 1.15; /* 2/sqrt(3) for proper pointy-top hexagon */
+
+    /* Tile type colors */
+    --tile-normal-color: #0a3442;
+    --tile-normal-glow: rgba(20, 70, 90, 0.8);
+    
+    --tile-energy-color: #0d564c;
+    --tile-energy-glow: rgba(104, 195, 166, 0.4);
+    
+    --tile-chaotic-color: #511e29;
+    --tile-chaotic-glow1: rgba(201, 60, 100, 0.3);
+    --tile-chaotic-glow2: rgba(201, 60, 100, 0.2);
+    
+    --tile-orderly-color: #0e3c4e;
+    --tile-orderly-glow1: rgba(42, 111, 142, 0.2);
+    --tile-orderly-glow2: rgba(42, 111, 142, 0.2);
+    
+    --tile-obstacle-color: #162527;
+    --tile-obstacle-pattern1: rgba(22, 37, 39, 0.9);
+    --tile-obstacle-pattern2: rgba(31, 46, 48, 0.9);
+    
+    --tile-unexplored-color: #041c26;
+    --tile-unexplored-glow: rgba(10, 52, 66, 0.3);
+    
+    /* Effect colors */
+    --effect-glow-color: rgba(104, 195, 166, 0.3);
+    --stabilize-glow-color: rgba(72, 219, 251, 0.3);
+}
+
 .hex-grid {
     position: absolute;
     overflow: visible;
@@ -12,11 +44,11 @@
 /* Individual hex tile */
 .hex-tile {
     position: absolute;
-    width: 80px; /* Increased from 70px for better desktop visibility */
-    height: 92px; /* Height should be width * 1.1547 (2/sqrt(3)) for proper pointy-top hexagon */
+    width: var(--tile-size);
+    height: calc(var(--tile-size) * var(--tile-height-ratio));
     clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%);
     transition: transform 0.25s cubic-bezier(0.15, 1.2, 0.3, 1), filter 0.3s ease;
-    --tile-background-color: #0a3442;
+    --tile-background-color: var(--tile-normal-color);
     background-color: var(--tile-background-color);
     cursor: pointer;
     box-sizing: border-box; /* Ensure border doesn't add to dimensions */
@@ -62,49 +94,49 @@
 
 /* Tile types with deep-sea biology theme */
 .hex-tile.normal {
-    --tile-background-color: #0a3442; /* Deep sea blue */
+    --tile-background-color: var(--tile-normal-color);
     background-image: 
-        radial-gradient(circle at center, rgba(20, 70, 90, 0.8) 0%, transparent 100%);
+        radial-gradient(circle at center, var(--tile-normal-glow) 0%, transparent 100%);
 }
 
 .hex-tile.obstacle {
-    --tile-background-color: #162527; /* Dark sea rock */
+    --tile-background-color: var(--tile-obstacle-color);
     background-image: 
-        linear-gradient(45deg, rgba(22, 37, 39, 0.9) 25%, rgba(31, 46, 48, 0.9) 25%), 
-        linear-gradient(-45deg, rgba(22, 37, 39, 0.9) 25%, rgba(31, 46, 48, 0.9) 25%);
+        linear-gradient(45deg, var(--tile-obstacle-pattern1) 25%, var(--tile-obstacle-pattern2) 25%), 
+        linear-gradient(-45deg, var(--tile-obstacle-pattern1) 25%, var(--tile-obstacle-pattern2) 25%);
     background-size: 20px 20px;
     box-shadow: 0 0 15px rgba(0, 0, 0, 0.4);
 }
 
 .hex-tile.energy {
-    --tile-background-color: #0d564c; /* Base color for energy tiles */
+    --tile-background-color: var(--tile-energy-color);
     background-image: 
-        radial-gradient(circle at center, rgba(104, 195, 166, 0.4) 0%, transparent 70%);
-    box-shadow: 0 0 10px rgba(104, 195, 166, 0.2);
+        radial-gradient(circle at center, var(--tile-energy-glow) 0%, transparent 70%);
+    box-shadow: 0 0 10px var(--tile-energy-glow);
     /* Subtle pulsing glow for energy tiles */
     animation: energyPulse 3s infinite alternate;
 }
 
 .hex-tile.chaotic {
-    --tile-background-color: #511e29; /* Deeper red for chaotic biology */
+    --tile-background-color: var(--tile-chaotic-color);
     background-image: 
-        radial-gradient(circle at 30% 70%, rgba(201, 60, 100, 0.3) 0%, transparent 70%),
-        radial-gradient(circle at 70% 30%, rgba(201, 60, 100, 0.2) 0%, transparent 60%);
-    box-shadow: 0 0 10px rgba(201, 60, 100, 0.15);
+        radial-gradient(circle at 30% 70%, var(--tile-chaotic-glow1) 0%, transparent 70%),
+        radial-gradient(circle at 70% 30%, var(--tile-chaotic-glow2) 0%, transparent 60%);
+    box-shadow: 0 0 10px var(--tile-chaotic-glow1);
 }
 
 .hex-tile.orderly {
-    --tile-background-color: #0e3c4e; /* Deep ordered blue */
+    --tile-background-color: var(--tile-orderly-color);
     background-image: 
-        linear-gradient(120deg, rgba(42, 111, 142, 0.2) 0%, transparent 50%),
-        linear-gradient(240deg, rgba(42, 111, 142, 0.2) 0%, transparent 50%);
-    box-shadow: 0 0 10px rgba(42, 111, 142, 0.15);
+        linear-gradient(120deg, var(--tile-orderly-glow1) 0%, transparent 50%),
+        linear-gradient(240deg, var(--tile-orderly-glow2) 0%, transparent 50%);
+    box-shadow: 0 0 10px var(--tile-orderly-glow1);
 }
 
 .hex-tile.unexplored {
-    --tile-background-color: #041c26; /* Dark abyss */
+    --tile-background-color: var(--tile-unexplored-color);
     background-image: 
-        radial-gradient(circle at center, rgba(10, 52, 66, 0.3) 0%, transparent 100%);
+        radial-gradient(circle at center, var(--tile-unexplored-glow) 0%, transparent 100%);
     filter: brightness(0.6) contrast(0.9) blur(1px);
     box-shadow: 0 0 8px rgba(0, 0, 0, 0.5);
 }
@@ -196,17 +228,17 @@
 
 @keyframes stabilize {
     0% {
-        box-shadow: 0 0 25px rgba(72, 219, 251, 0.3);
+        box-shadow: 0 0 25px var(--stabilize-glow-color);
     }
     100% {
-        box-shadow: 0 0 0 rgba(72, 219, 251, 0);
+        box-shadow: 0 0 0 var(--stabilize-glow-color);
     }
 }
 
 @keyframes pulseGlow {
-    0% { box-shadow: 0 0 5px rgba(104, 195, 166, 0.3); }
-    50% { box-shadow: 0 0 20px rgba(104, 195, 166, 0.6); }
-    100% { box-shadow: 0 0 5px rgba(104, 195, 166, 0.3); }
+    0% { box-shadow: 0 0 5px var(--effect-glow-color); }
+    50% { box-shadow: 0 0 20px var(--effect-glow-color); }
+    100% { box-shadow: 0 0 5px var(--effect-glow-color); }
 }
 
 @keyframes shiftColors {
@@ -217,10 +249,10 @@
 
 @keyframes energyPulse {
     0% {
-        box-shadow: 0 0 10px rgba(104, 195, 166, 0.2);
+        box-shadow: 0 0 10px var(--tile-energy-glow);
     }
     100% {
-        box-shadow: 0 0 25px rgba(104, 195, 166, 0.5); /* Enhanced glow effect */
+        box-shadow: 0 0 25px var(--tile-energy-glow); /* Enhanced glow effect */
     }
 }
 

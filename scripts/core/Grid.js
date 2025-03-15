@@ -272,8 +272,11 @@ export class Grid {
         const tileProbabilities = this.getTileProbabilities();
         
         // Hex dimensions and spacing
-        const hexWidth = 80;  // Updated from 70px to match CSS
-        const hexHeight = 92; // Updated from 80px to match CSS
+        // Get dimensions from CSS variables to ensure consistency
+        const computedStyle = getComputedStyle(document.documentElement);
+        const hexWidth = parseInt(computedStyle.getPropertyValue('--tile-size') || '80', 10);
+        const hexHeightRatio = parseFloat(computedStyle.getPropertyValue('--tile-height-ratio') || '1.15');
+        const hexHeight = hexWidth * hexHeightRatio;
         
         // Calculate proper spacing for a honeycomb pattern
         // For pointy-top hexagons:
@@ -460,6 +463,9 @@ export class Grid {
         
         // Attach DOM element to component
         tileComponent.element = hexCell;
+        
+        // Initialize visual state based on tile properties
+        tileComponent.updateVisualState();
         
         // Add a tag for easy lookup by position
         entity.addTag(`tile_${row}_${col}`);
