@@ -238,11 +238,8 @@ export class ActionPanel {
             return;
         }
         
-        // Check if player has movement points
-        if (playerComponent.movementPoints <= 0) {
-            this.showFeedback("No movement points left! End your turn.", 'warning', 2000, false, 'resource-depleted');
-            return;
-        }
+        // Resource checks are now handled by button disabled state, so this check is redundant
+        // If a button is clickable, the player must have the required resources
         
         // Toggle the action - clicking the same action button will deselect it
         // However, after performing an action, it will stay selected until:
@@ -728,45 +725,51 @@ export class ActionPanel {
             }
         }
         
-        // Update sense button - requires energy
+        // Update sense button - requires energy AND movement points
         if (this.buttons.sense) {
-            const canSense = hasEnergy && playerComponent.energy >= senseEnergyCost;
+            const canSense = hasEnergy && playerComponent.energy >= senseEnergyCost && hasMovementPoints;
             this.buttons.sense.disabled = !canSense;
             
-            if (!hasEnergy) {
+            if (!hasMovementPoints) {
+                this.buttons.sense.title = "Requires movement points";
+            } else if (!hasEnergy) {
                 this.buttons.sense.title = "Requires energy";
-            } else if (!canSense) {
+            } else if (playerComponent.energy < senseEnergyCost) {
                 this.buttons.sense.title = `Not enough energy (cost: ${senseEnergyCost})`;
             } else {
-                this.buttons.sense.title = `Sense the environment (cost: ${senseEnergyCost} energy)`;
+                this.buttons.sense.title = `Sense the environment (cost: ${senseEnergyCost} energy, 1 movement)`;
             }
         }
         
-        // Update interact button - requires energy
+        // Update interact button - requires energy AND movement points
         if (this.buttons.interact) {
-            const canInteract = hasEnergy && playerComponent.energy >= interactEnergyCost;
+            const canInteract = hasEnergy && playerComponent.energy >= interactEnergyCost && hasMovementPoints;
             this.buttons.interact.disabled = !canInteract;
             
-            if (!hasEnergy) {
+            if (!hasMovementPoints) {
+                this.buttons.interact.title = "Requires movement points";
+            } else if (!hasEnergy) {
                 this.buttons.interact.title = "Requires energy";
-            } else if (!canInteract) {
+            } else if (playerComponent.energy < interactEnergyCost) {
                 this.buttons.interact.title = `Not enough energy (cost: ${interactEnergyCost})`;
             } else {
-                this.buttons.interact.title = `Interact with tile (cost: ${interactEnergyCost} energy)`;
+                this.buttons.interact.title = `Interact with tile (cost: ${interactEnergyCost} energy, 1 movement)`;
             }
         }
         
-        // Update stabilize button - requires energy
+        // Update stabilize button - requires energy AND movement points
         if (this.buttons.stabilize) {
-            const canStabilize = hasEnergy && playerComponent.energy >= stabilizeEnergyCost;
+            const canStabilize = hasEnergy && playerComponent.energy >= stabilizeEnergyCost && hasMovementPoints;
             this.buttons.stabilize.disabled = !canStabilize;
             
-            if (!hasEnergy) {
+            if (!hasMovementPoints) {
+                this.buttons.stabilize.title = "Requires movement points";
+            } else if (!hasEnergy) {
                 this.buttons.stabilize.title = "Requires energy";
-            } else if (!canStabilize) {
+            } else if (playerComponent.energy < stabilizeEnergyCost) {
                 this.buttons.stabilize.title = `Not enough energy (cost: ${stabilizeEnergyCost})`;
             } else {
-                this.buttons.stabilize.title = `Stabilize tile chaos (cost: ${stabilizeEnergyCost} energy)`;
+                this.buttons.stabilize.title = `Stabilize tile chaos (cost: ${stabilizeEnergyCost} energy, 1 movement)`;
             }
         }
     }
