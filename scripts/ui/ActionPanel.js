@@ -196,6 +196,11 @@ export class ActionPanel {
         this._registeredEvents.push(
             eventSystem.on(EventTypes.PLAYER_ACTION_CHANGED.standard, this.onPlayerActionChanged.bind(this))
         );
+
+        // Listen for player movement to update highlights
+        this._registeredEvents.push(
+            eventSystem.on(EventTypes.PLAYER_MOVED.standard, this.onPlayerMoved.bind(this))
+        );
     }
     
     /**
@@ -215,6 +220,7 @@ export class ActionPanel {
                     playerComponent.setAction(null);
                     this.currentAction = null;
                     this.updateButtonStates();
+                    this.clearAdjacentTileHighlights(); // Clear highlights when deselecting
                 }
             }
             return;
@@ -238,27 +244,64 @@ export class ActionPanel {
             return;
         }
         
-        // Resource checks are now handled by button disabled state, so this check is redundant
-        // If a button is clickable, the player must have the required resources
-        
-        // Toggle the action - clicking the same action button will deselect it
-        // However, after performing an action, it will stay selected until:
-        // 1. Player clicks the action button again to deselect it
-        // 2. Player runs out of movement points
-        // 3. Player doesn't have enough energy for another action
-        // 4. Player ends their turn
+        // Toggle the action
         if (playerComponent.currentAction === action) {
             playerComponent.setAction(null);
             this.currentAction = null;
             this.showFeedback(`${this.formatActionName(action)} action deselected`, '', 2000, false, 'action-selection');
+            this.clearAdjacentTileHighlights(); // Clear highlights when deselecting
         } else {
             playerComponent.setAction(action);
             this.currentAction = action;
             this.showFeedback(`${this.formatActionName(action)} action selected. Click a highlighted tile.`, '', 2000, false, 'action-selection');
+            this.highlightAdjacentTiles(playerComponent); // Highlight adjacent tiles when selecting
         }
         
         // Update button states
         this.updateButtonStates();
+    }
+    
+    /**
+     * Highlight tiles adjacent to the player's position
+     * @param {PlayerComponent} playerComponent - The player component
+     */
+    highlightAdjacentTiles(playerComponent) {
+        // Clear any existing highlights first
+        this.clearAdjacentTileHighlights();
+        
+        if (!this.grid) return;
+        
+        // Get adjacent tiles
+        const adjacentTiles = this.grid.getAdjacentTiles(playerComponent.row, playerComponent.col);
+        
+        // Highlight each adjacent tile
+        adjacentTiles.forEach(tileEntity => {
+            const tileComponent = tileEntity.getComponent(TileComponent);
+            if (tileComponent) {
+                tileComponent.setHighlighted(true);
+            }
+        });
+    }
+
+    /**
+     * Clear highlights from all tiles
+     */
+    clearAdjacentTileHighlights() {
+        if (!this.grid || !this.grid.tiles) return;
+        
+        // Clear highlights from all tiles
+        this.grid.tiles.forEach(row => {
+            if (Array.isArray(row)) {
+                row.forEach(tileEntity => {
+                    if (tileEntity) {
+                        const tileComponent = tileEntity.getComponent(TileComponent);
+                        if (tileComponent) {
+                            tileComponent.setHighlighted(false);
+                        }
+                    }
+                });
+            }
+        });
     }
     
     /**
@@ -461,10 +504,12 @@ export class ActionPanel {
             playerComponent.setAction(null);
             this.currentAction = null;
             this.showFeedback("No movement points left! Action deselected.", "warning", 2000, true, 'resource-depleted');
+            this.clearAdjacentTileHighlights(); // Clear highlights when out of movement points
         } else if (playerComponent.energy < energyCost) {
             playerComponent.setAction(null);
             this.currentAction = null;
             this.showFeedback("Not enough energy for another action! Action deselected.", "warning", 2000, true, 'resource-depleted');
+            this.clearAdjacentTileHighlights(); // Clear highlights when out of energy
         }
         
         // Update UI
@@ -498,6 +543,9 @@ export class ActionPanel {
         if (result.success) {
             // Show feedback
             this.showFeedback(`Moved to (${row}, ${col})`, "success", 2000, true, 'action-move');
+            
+            // Note: We don't need to manually update highlights here
+            // The PLAYER_MOVED event will trigger onPlayerMoved
             return true;
         } else {
             // Show error feedback
@@ -861,6 +909,9 @@ export class ActionPanel {
             }
         }
         
+        // Clear any highlights
+        this.clearAdjacentTileHighlights();
+        
         // Update button states
         this.updateButtonStates();
     }
@@ -880,6 +931,24 @@ export class ActionPanel {
     onPlayerActionChanged(data) {
         this.currentAction = data.action;
         this.updateButtonStates();
+    }
+    
+    /**
+     * Handle player movement event
+     * @param {object} data - Movement event data
+     */
+    onPlayerMoved(data) {
+        // Get player component
+        const playerEntity = this.entityManager ? this.entityManager.getEntitiesByTag('player')[0] : null;
+        if (!playerEntity) return;
+        
+        const playerComponent = playerEntity.getComponent(PlayerComponent);
+        if (!playerComponent) return;
+        
+        // If there's a current action selected, update highlights for new position
+        if (this.currentAction) {
+            this.highlightAdjacentTiles(playerComponent);
+        }
     }
     
     /**

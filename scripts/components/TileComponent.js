@@ -414,6 +414,20 @@ export class TileComponent extends Component {
     }
     
     /**
+     * Set the tile's highlight state
+     * @param {boolean} highlighted - Whether the tile should be highlighted
+     */
+    setHighlighted(highlighted) {
+        if (!this.element) return;
+        
+        if (highlighted) {
+            this.element.classList.add('highlighted');
+        } else {
+            this.element.classList.remove('highlighted');
+        }
+    }
+    
+    /**
      * Update the visual state of the tile based on its properties
      * Called whenever the tile's properties change and the visual needs to be updated
      */
@@ -424,7 +438,7 @@ export class TileComponent extends Component {
         }
         
         // Clear existing type classes
-        this.element.classList.remove('normal', 'energy', 'chaotic', 'orderly', 'obstacle');
+        this.element.classList.remove('normal', 'energy', 'chaotic', 'orderly', 'obstacle', 'highlighted');
         
         // Add the current type class
         this.element.classList.add(this.type);
