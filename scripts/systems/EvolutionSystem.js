@@ -102,8 +102,13 @@ export class EvolutionSystem {
                     cost: 5,
                     category: 'adaptation',
                     onAcquire: null,
-                    // Special effect handled in movement logic
-                    modifiesActionCost: null
+                    // Add implementation for water tile movement
+                    modifiesActionCost: (action, cost, tile) => {
+                        if (action === 'move' && tile && tile.type === 'water') {
+                            return Math.max(1, cost - 3); // Make water tiles much easier to traverse
+                        }
+                        return cost;
+                    }
                 },
                 {
                     id: 'mountaineer',
@@ -125,11 +130,26 @@ export class EvolutionSystem {
                 {
                     id: 'energy_efficiency',
                     name: 'Energy Efficiency',
-                    description: 'Gain 1 extra energy each turn',
+                    description: 'Gain 2 extra energy each turn',
                     cost: 4,
                     category: 'survival',
                     onAcquire: null,
+                    effects: {
+                        energyPerTurn: 2
+                    },
                     // Special effect handled in turn system
+                    modifiesActionCost: null
+                },
+                {
+                    id: 'energy_capacity',
+                    name: 'Energy Capacity',
+                    description: 'Increases maximum energy by 5',
+                    cost: 3,
+                    category: 'survival',
+                    onAcquire: null,
+                    effects: {
+                        maxEnergy: 5
+                    },
                     modifiesActionCost: null
                 },
                 {
@@ -139,6 +159,9 @@ export class EvolutionSystem {
                     cost: 3,
                     category: 'survival',
                     onAcquire: null,
+                    effects: {
+                        energyOnExplore: 1
+                    },
                     // Special effect handled in exploration logic
                     modifiesActionCost: null
                 }

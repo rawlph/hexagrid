@@ -394,14 +394,29 @@ export class EventMediator {
         // Extract data from the action
         const { player, tileComponent, row, col, grid } = actionData;
         
-        if (this.debugMode) {
-            console.log(`EventMediator: Handling move action to (${row}, ${col})`);
-        }
-        
         // Begin a transaction for this action
         const transactionId = this.beginTransaction('move', actionData);
         
         try {
+            // Log detailed information about move action
+            console.log(`EventMediator: Move to (${row}, ${col}), tile type: ${tileComponent.type}`);
+            
+            // Log any relevant traits that might affect this move
+            if (player.traits && player.traits.length > 0) {
+                for (const trait of player.traits) {
+                    if (trait && trait.modifiesActionCost && typeof trait.modifiesActionCost === 'function') {
+                        // Calculate the base cost
+                        const baseCost = tileComponent.getActionCost('move');
+                        // Calculate the modified cost
+                        const modifiedCost = trait.modifiesActionCost('move', baseCost, tileComponent);
+                        
+                        if (baseCost !== modifiedCost) {
+                            console.log(`EventMediator: Move cost modified by trait ${trait.id} (${trait.name}): ${baseCost} -> ${modifiedCost} for tile type ${tileComponent.type}`);
+                        }
+                    }
+                }
+            }
+            
             // Store the original values for potential rollback
             const originalPlayerRow = player.row;
             const originalPlayerCol = player.col;
@@ -506,10 +521,29 @@ export class EventMediator {
             // Store the original values for potential rollback
             const wasExplored = tileComponent.explored;
             const originalSystemChaos = grid.getSystemBalance().chaos;
+            const originalPlayerEnergy = player.energy;
             
             // Mark tile as explored and get its data
             tileComponent.markExplored();
             const tileInfo = tileComponent.getData();
+            
+            // Check if the player has the regeneration trait
+            let energyRecovered = 0;
+            if (!wasExplored && Array.isArray(player.traits)) {
+                for (const trait of player.traits) {
+                    if (trait && trait.effects && trait.effects.energyOnExplore) {
+                        energyRecovered += trait.effects.energyOnExplore;
+                        console.log(`Applied ${trait.name} trait: +${trait.effects.energyOnExplore} energy from exploring a new tile`);
+                    }
+                }
+                
+                // Add energy from regeneration trait if applicable
+                if (energyRecovered > 0) {
+                    // Use direct update to avoid emitting events during transaction
+                    const newEnergy = Math.min(player.maxEnergy, player.energy + energyRecovered);
+                    player._updateEnergyDirect(newEnergy);
+                }
+            }
             
             // Record the tile explored event
             this.recordEvent(transactionId, 'tile:explored', {
@@ -520,7 +554,8 @@ export class EventMediator {
                 tileComponent: tileComponent,
                 tileInfo: tileInfo,
                 type: tileComponent.type,
-                sourceAction: 'sense'
+                sourceAction: 'sense',
+                energyRecovered: energyRecovered
             });
             
             // Sensing has a small effect on system chaos

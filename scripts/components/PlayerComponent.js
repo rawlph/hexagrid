@@ -379,14 +379,13 @@ export class PlayerComponent extends Component {
     }
     
     /**
-     * Internal method to directly update energy without using the mediator
-     * Used by the EventMediator to avoid infinite recursion
+     * Update energy directly without emitting events
+     * This is used for direct changes during transaction processing
      * @param {number} newValue - New energy value
      * @private
      */
     _updateEnergyDirect(newValue) {
         this.energy = Math.max(0, Math.min(this.maxEnergy, newValue));
-        return this.energy;
     }
     
     /**
@@ -444,14 +443,13 @@ export class PlayerComponent extends Component {
     }
     
     /**
-     * Internal method to directly update movement points without using the mediator
-     * Used by the EventMediator to avoid infinite recursion
+     * Update movement points directly without emitting events
+     * This is used for direct changes during transaction processing
      * @param {number} newValue - New movement points value
      * @private
      */
     _updateMovementPointsDirect(newValue) {
         this.movementPoints = Math.max(0, Math.min(this.maxMovementPoints, newValue));
-        return this.movementPoints;
     }
     
     /**
@@ -522,20 +520,40 @@ export class PlayerComponent extends Component {
     applyTraitEffects(trait) {
         console.log(`PlayerComponent: Applying effects from trait ${trait.id} (${trait.name})`);
         
-        // Apply stat changes
+        if (!trait) {
+            console.warn('PlayerComponent: Attempted to apply null trait');
+            return;
+        }
+        
+        // Apply stat changes from effects property
         if (trait.effects) {
+            console.log(`PlayerComponent: Applying static effects for trait ${trait.id}`);
+            
             if (trait.effects.maxEnergy) {
+                const oldMaxEnergy = this.maxEnergy;
                 this.maxEnergy += trait.effects.maxEnergy;
-                console.log(`PlayerComponent: Applied maxEnergy effect: +${trait.effects.maxEnergy}`);
-            }
-            if (trait.effects.maxMovementPoints) {
-                this.maxMovementPoints += trait.effects.maxMovementPoints;
-                console.log(`PlayerComponent: Applied maxMovementPoints effect: +${trait.effects.maxMovementPoints}`);
+                console.log(`PlayerComponent: Applied maxEnergy effect: +${trait.effects.maxEnergy} (now ${this.maxEnergy})`);
+                
+                // Also increase current energy
+                const oldEnergy = this.energy;
+                this.energy += trait.effects.maxEnergy;
+                console.log(`PlayerComponent: Also increased current energy by ${trait.effects.maxEnergy}`);
             }
             
-            // Refill to new max
-            this.energy = this.maxEnergy;
-            this.movementPoints = this.maxMovementPoints;
+            if (trait.effects.maxMovementPoints) {
+                const oldMaxMovement = this.maxMovementPoints;
+                this.maxMovementPoints += trait.effects.maxMovementPoints;
+                console.log(`PlayerComponent: Applied maxMovementPoints effect: +${trait.effects.maxMovementPoints} (now ${this.maxMovementPoints})`);
+                
+                // Also increase current movement points
+                const oldMovement = this.movementPoints;
+                this.movementPoints += trait.effects.maxMovementPoints;
+                console.log(`PlayerComponent: Also increased current movement points by ${trait.effects.maxMovementPoints}`);
+            }
+            
+            // Other effects that might be in the trait.effects object
+            // energyPerTurn - handled in onTurnStart
+            // energyOnExplore - handled in tile exploration
             
             // Emit events for resource changes
             eventSystem.emitStandardized(
@@ -543,9 +561,9 @@ export class PlayerComponent extends Component {
                 EventTypes.PLAYER_ENERGY_CHANGED.standard,
                 {
                     player: this,
-                    oldEnergy: this.energy,
+                    oldEnergy: this.energy - (trait.effects.maxEnergy || 0),
                     energy: this.energy,
-                    delta: 0
+                    delta: trait.effects.maxEnergy || 0
                 }
             );
             
@@ -554,9 +572,9 @@ export class PlayerComponent extends Component {
                 EventTypes.PLAYER_MOVEMENT_POINTS_CHANGED.standard,
                 {
                     player: this,
-                    oldMovementPoints: this.movementPoints,
+                    oldMovementPoints: this.movementPoints - (trait.effects.maxMovementPoints || 0),
                     movementPoints: this.movementPoints,
-                    delta: 0
+                    delta: trait.effects.maxMovementPoints || 0
                 }
             );
         }
@@ -658,20 +676,25 @@ export class PlayerComponent extends Component {
         const oldEnergy = this.energy;
         const energyRecovery = 5; // Base recovery amount as per documentation
         
-        // Check if the player has energy efficiency trait which could modify this
-        let finalRecovery = energyRecovery;
+        // Check for energy-related traits
+        let additionalEnergy = 0;
         if (Array.isArray(this.traits)) {
             for (const trait of this.traits) {
-                if (trait && trait.id === 'energy_efficiency') {
-                    // Apply energy efficiency bonus if the trait exists
-                    finalRecovery += 2; // Additional energy from trait
-                    console.log('Energy Efficiency trait applied: +2 additional energy');
-                    break;
+                // Skip if trait is null or undefined
+                if (!trait) continue;
+                
+                // Apply energy per turn bonus if specified in trait effects
+                if (trait.effects && trait.effects.energyPerTurn) {
+                    additionalEnergy += trait.effects.energyPerTurn;
+                    console.log(`Applied ${trait.name} trait: +${trait.effects.energyPerTurn} additional energy`);
                 }
             }
         }
         
-        this.energy = Math.min(this.maxEnergy, this.energy + finalRecovery);
+        this.energy = Math.min(this.maxEnergy, this.energy + energyRecovery + additionalEnergy);
+        
+        // Log energy recovery for debugging
+        console.log(`Energy recovered: ${energyRecovery} base + ${additionalEnergy} from traits = ${energyRecovery + additionalEnergy} total`);
         
         // Emit energy changed event if energy changed - use standardized emission with deprecation info
         if (this.energy !== oldEnergy) {
@@ -686,7 +709,7 @@ export class PlayerComponent extends Component {
                     newEnergy: this.energy,
                     delta: this.energy - oldEnergy,
                     // Include specific property for metrics tracking
-                    energyRestored: finalRecovery
+                    energyRestored: energyRecovery + additionalEnergy
                 },
                 EventTypes.PLAYER_ENERGY_CHANGED.deprecation
             );
@@ -971,12 +994,15 @@ export class PlayerComponent extends Component {
     resetMovementPoints() {
         // Get base max movement points
         let maxPoints = this.maxMovementPoints;
+        let bonusExplanation = "";
         
         // Apply trait modifiers if any
         if (Array.isArray(this.traits)) {
             for (const trait of this.traits) {
                 if (trait && trait.modifiesMaxMovementPoints && typeof trait.modifiesMaxMovementPoints === 'function') {
+                    const oldMax = maxPoints;
                     maxPoints = trait.modifiesMaxMovementPoints(maxPoints);
+                    bonusExplanation += `\n  - ${trait.name}: ${oldMax} -> ${maxPoints}`;
                 }
             }
         }
@@ -995,7 +1021,7 @@ export class PlayerComponent extends Component {
             }
         );
         
-        console.log(`PlayerComponent: Reset movement points to ${this.movementPoints}`);
+        console.log(`PlayerComponent: Reset movement points to ${this.movementPoints}${bonusExplanation}`);
         return this.movementPoints;
     }
     

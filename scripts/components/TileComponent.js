@@ -168,6 +168,16 @@ export class TileComponent extends Component {
                 this.isBlocked = true;
                 this.actionCosts.move = 999; // Cannot move here
                 break;
+                
+            case 'mountain':
+                this.actionCosts.move = 3; // More difficult to move through mountains
+                this.actionCosts.interact = 2;
+                break;
+                
+            case 'water':
+                this.actionCosts.move = 4; // Very difficult to move through water without adaptation
+                this.actionCosts.interact = 3;
+                break;
         }
         
         // Adjust action costs based on chaos level
