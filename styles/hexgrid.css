@@ -91,8 +91,9 @@
 .hex-coordinates {
     position: absolute;
     bottom: 5px;
-    font-size: 0.7rem; /* Slightly increased from mobile size */
-    opacity: 0.5;
+    font-size: 0.7rem;
+    opacity: 0;  /* Hide from view but keep in DOM */
+    pointer-events: none;  /* Ensure hidden text doesn't interfere with clicks */
 }
 
 /* Tile icon */
