@@ -773,7 +773,7 @@ export class Game {
         
         // New game should reset all progress, so we don't save player traits
         
-        // Clean up resources
+        // Make sure to fully destroy the game, including all event listeners and components
         this.destroy();
         
         // Re-initialize the game with the specified grid size
@@ -787,7 +787,53 @@ export class Game {
         if (playerEntity) {
             const playerComponent = playerEntity.getComponent(PlayerComponent);
             if (playerComponent) {
-                // Explicitly emit event to update UI with reset evolution points
+                console.log("Resetting player component for new game");
+                
+                // Explicitly reset player component state
+                playerComponent.traits = [];
+                playerComponent.abilities = [];
+                playerComponent.exploredTiles = 0;
+                playerComponent.tilesStabilized = 0;
+                playerComponent.tilesDestabilized = 0;
+                playerComponent.movesMade = 0;
+                playerComponent.energyUsed = 0;
+                
+                // Reset current action
+                playerComponent.setAction(null);
+                
+                // Explicitly reset movement points and energy
+                playerComponent.resetMovementPoints();
+                playerComponent.resetEnergy();
+                
+                // Log resource values before updating UI
+                console.log(`Player state after reset - Movement: ${playerComponent.movementPoints}, Energy: ${playerComponent.energy}`);
+                
+                // Emit events to update UI for movement points and energy (this triggers ActionPanel.updateButtonStates)
+                this.eventSystem.emitStandardized(
+                    EventTypes.PLAYER_MOVEMENT_POINTS_CHANGED.legacy,
+                    EventTypes.PLAYER_MOVEMENT_POINTS_CHANGED.standard,
+                    {
+                        player: playerComponent,
+                        movementPoints: playerComponent.movementPoints,
+                        maxMovementPoints: playerComponent.maxMovementPoints,
+                        delta: playerComponent.movementPoints,
+                        isStandardized: true
+                    }
+                );
+                
+                this.eventSystem.emitStandardized(
+                    EventTypes.PLAYER_ENERGY_CHANGED.legacy,
+                    EventTypes.PLAYER_ENERGY_CHANGED.standard,
+                    {
+                        player: playerComponent,
+                        energy: playerComponent.energy,
+                        maxEnergy: playerComponent.maxEnergy,
+                        delta: playerComponent.energy,
+                        isStandardized: true
+                    }
+                );
+                
+                // Also update evolution points
                 this.eventSystem.emitStandardized(
                     EventTypes.PLAYER_EVOLUTION_POINTS_CHANGED.legacy,
                     EventTypes.PLAYER_EVOLUTION_POINTS_CHANGED.standard,
@@ -800,21 +846,22 @@ export class Game {
                         isStandardized: true
                     }
                 );
-                console.log("Explicitly updating UI with reset evolution points");
                 
-                // Reset components in player entity
-                playerComponent.traits = [];
-                playerComponent.abilities = [];
-                playerComponent.exploredTiles = 0;
-                playerComponent.tilesStabilized = 0;
-                playerComponent.tilesDestabilized = 0;
-                playerComponent.movesMade = 0;
-                playerComponent.energyUsed = 0;
+                console.log(`Player resources reset for new game: Movement: ${playerComponent.movementPoints}, Energy: ${playerComponent.energy}`);
             }
         }
         
-        // Explicitly update UI to refresh the turn counter and all displays
-        this.updateUI();
+        // Force a full UI update with the forceUpdate flag
+        this.updateUI(true);
+        
+        // Ensure ActionPanel button states are updated directly
+        if (window.actionPanel) {
+            console.log("Directly updating ActionPanel button states after new game");
+            // Small delay to ensure DOM is ready
+            setTimeout(() => {
+                window.actionPanel.updateButtonStates();
+            }, 50);
+        }
         
         return true;
     }

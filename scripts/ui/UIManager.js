@@ -69,6 +69,16 @@ export class UIManager {
             console.warn("UIManager initialized without grid or turn system");
         }
         
+        // Re-acquire DOM references to ensure they're up to date
+        this.energyDisplay = document.querySelector('#energy-display .resource-value');
+        this.movementDisplay = document.querySelector('#movement-display .resource-value');
+        this.turnDisplay = document.querySelector('#turn-display .resource-value');
+        this.balanceChaosDisplay = document.querySelector('#balance-display .chaos-resource-value');
+        this.balanceOrderDisplay = document.querySelector('#balance-display .order-resource-value');
+        this.evolutionChaosDisplay = document.querySelector('#evolution-points-display .chaos-resource-value');
+        this.evolutionFlowDisplay = document.querySelector('#evolution-points-display .flow-resource-value');
+        this.evolutionOrderDisplay = document.querySelector('#evolution-points-display .order-resource-value');
+        
         // Set up button listeners
         this.setupButtonListeners();
         
@@ -78,6 +88,18 @@ export class UIManager {
         // Initialize action panel with dependencies - AFTER everything else is set up
         // This ensures proper order of initialization
         setTimeout(() => {
+            console.log("Initializing ActionPanel with fresh dependencies");
+            
+            // Create a new ActionPanel instance to ensure clean state
+            if (this.actionPanel) {
+                this.actionPanel.destroy();
+            }
+            
+            this.actionPanel = new ActionPanel({
+                grid: this.grid,
+                turnSystem: this.turnSystem
+            });
+            
             this.actionPanel.init(this.messageSystem, {
                 grid: this.grid,
                 turnSystem: this.turnSystem
@@ -97,6 +119,14 @@ export class UIManager {
                     isStandardized: true
                 }
             );
+            
+            // Explicitly update button states after initialization
+            setTimeout(() => {
+                if (this.actionPanel && typeof this.actionPanel.updateButtonStates === 'function') {
+                    console.log("Explicitly updating button states after ActionPanel initialization");
+                    this.actionPanel.updateButtonStates();
+                }
+            }, 50);
         }, 0);
         
         return true;

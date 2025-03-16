@@ -697,9 +697,13 @@ export class ActionPanel {
         const hasMovementPoints = playerComponent.movementPoints > 0;
         const hasEnergy = playerComponent.energy > 0;
         
+        console.log(`ActionPanel: Resources check - Has movement: ${hasMovementPoints}, Has energy: ${hasEnergy}`);
+        
         // Update move button - requires movement points
         if (this.buttons.move) {
+            // Explicitly set disabled state based on movement points
             this.buttons.move.disabled = !hasMovementPoints;
+            console.log(`ActionPanel: Move button disabled: ${this.buttons.move.disabled}`);
             
             // Add explanatory tooltip if disabled
             if (!hasMovementPoints) {
@@ -729,6 +733,7 @@ export class ActionPanel {
         if (this.buttons.sense) {
             const canSense = hasEnergy && playerComponent.energy >= senseEnergyCost && hasMovementPoints;
             this.buttons.sense.disabled = !canSense;
+            console.log(`ActionPanel: Sense button disabled: ${this.buttons.sense.disabled}`);
             
             if (!hasMovementPoints) {
                 this.buttons.sense.title = "Requires movement points";
@@ -745,6 +750,7 @@ export class ActionPanel {
         if (this.buttons.interact) {
             const canInteract = hasEnergy && playerComponent.energy >= interactEnergyCost && hasMovementPoints;
             this.buttons.interact.disabled = !canInteract;
+            console.log(`ActionPanel: Interact button disabled: ${this.buttons.interact.disabled}`);
             
             if (!hasMovementPoints) {
                 this.buttons.interact.title = "Requires movement points";
@@ -761,6 +767,7 @@ export class ActionPanel {
         if (this.buttons.stabilize) {
             const canStabilize = hasEnergy && playerComponent.energy >= stabilizeEnergyCost && hasMovementPoints;
             this.buttons.stabilize.disabled = !canStabilize;
+            console.log(`ActionPanel: Stabilize button disabled: ${this.buttons.stabilize.disabled}`);
             
             if (!hasMovementPoints) {
                 this.buttons.stabilize.title = "Requires movement points";
@@ -772,6 +779,13 @@ export class ActionPanel {
                 this.buttons.stabilize.title = `Stabilize tile chaos (cost: ${stabilizeEnergyCost} energy, 1 movement)`;
             }
         }
+        
+        // Force a DOM update to ensure button states are applied
+        // This is needed because sometimes browsers batch updates
+        if (this.buttons.move) this.buttons.move.offsetHeight; // Trigger reflow
+        if (this.buttons.sense) this.buttons.sense.offsetHeight; // Trigger reflow
+        if (this.buttons.interact) this.buttons.interact.offsetHeight; // Trigger reflow
+        if (this.buttons.stabilize) this.buttons.stabilize.offsetHeight; // Trigger reflow
     }
     
     /**
