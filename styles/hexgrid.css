@@ -30,6 +30,15 @@
     --tile-unexplored-color: #041c26;
     --tile-unexplored-glow: rgba(10, 52, 66, 0.3);
     
+    /* New tile types colors */
+    --tile-mountain-color: #363028;
+    --tile-mountain-glow1: rgba(73, 60, 45, 0.3);
+    --tile-mountain-glow2: rgba(93, 80, 65, 0.2);
+    
+    --tile-water-color: #093e57;
+    --tile-water-glow1: rgba(25, 100, 140, 0.2);
+    --tile-water-glow2: rgba(10, 80, 120, 0.2);
+    
     /* Effect colors */
     --effect-glow-color: rgba(104, 195, 166, 0.3);
     --stabilize-glow-color: rgba(72, 219, 251, 0.3);
@@ -282,4 +291,63 @@
     0% { opacity: 0.7; transform: rotate(0deg); }
     50% { opacity: 1; transform: rotate(1deg); }
     100% { opacity: 0.7; transform: rotate(-1deg); }
+}
+
+/* Add new styles for mountain and water tiles after the other tile type styles */
+.hex-tile.mountain {
+    --tile-background-color: var(--tile-mountain-color);
+    background-image: 
+        linear-gradient(45deg, var(--tile-mountain-glow1) 0%, transparent 70%),
+        linear-gradient(135deg, var(--tile-mountain-glow2) 0%, transparent 70%);
+    box-shadow: 0 0 10px rgba(54, 48, 40, 0.4);
+}
+
+.hex-tile.mountain::after {
+    content: '';
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    top: 0;
+    left: 0;
+    background-image: 
+        linear-gradient(45deg, rgba(93, 80, 65, 0.3) 25%, transparent 25%),
+        linear-gradient(135deg, transparent 75%, rgba(73, 60, 45, 0.3) 75%);
+    background-size: 15px 15px;
+    clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%);
+    pointer-events: none;
+}
+
+.hex-tile.water {
+    --tile-background-color: var(--tile-water-color);
+    background-image: 
+        radial-gradient(ellipse at center, var(--tile-water-glow1) 0%, transparent 70%),
+        linear-gradient(180deg, var(--tile-water-glow2) 0%, transparent 100%);
+    box-shadow: 0 0 15px rgba(9, 62, 87, 0.4);
+    animation: waterRipple 8s infinite alternate ease-in-out;
+}
+
+.hex-tile.water::after {
+    content: '';
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    top: 0;
+    left: 0;
+    background-image: 
+        repeating-linear-gradient(0deg, rgba(25, 100, 140, 0.1) 0px, rgba(10, 80, 120, 0.1) 2px, transparent 2px, transparent 4px);
+    clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%);
+    pointer-events: none;
+    animation: waterFlow 10s infinite linear;
+}
+
+/* Add water animation keyframes */
+@keyframes waterRipple {
+    0% { background-position: 0% 0%; }
+    50% { background-position: 2% 5%; }
+    100% { background-position: 0% 0%; }
+}
+
+@keyframes waterFlow {
+    0% { background-position: 0px 0px; }
+    100% { background-position: 0px 50px; }
 } 

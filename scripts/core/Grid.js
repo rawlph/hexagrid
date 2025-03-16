@@ -351,11 +351,13 @@ export class Grid {
     getTileProbabilities() {
         // Default probabilities
         let probabilities = {
-            normal: 0.7,
+            normal: 0.65,
             energy: 0.1,
-            chaotic: 0.1,
-            orderly: 0.1,
-            obstacle: 0.0
+            chaotic: 0.07,
+            orderly: 0.07,
+            obstacle: 0.01,
+            mountain: 0.05,
+            water: 0.05
         };
         
         // Adjust based on game stage
@@ -363,33 +365,39 @@ export class Grid {
             case 'early':
                 // More normal tiles, some energy, few special tiles
                 probabilities = {
-                    normal: 0.7,
+                    normal: 0.65,
                     energy: 0.15,
-                    chaotic: 0.07,
-                    orderly: 0.07,
-                    obstacle: 0.01
+                    chaotic: 0.05,
+                    orderly: 0.05,
+                    obstacle: 0.01,
+                    mountain: 0.05,
+                    water: 0.04
                 };
                 break;
                 
             case 'mid':
                 // More balanced distribution
                 probabilities = {
-                    normal: 0.55,
-                    energy: 0.15,
-                    chaotic: 0.12,
-                    orderly: 0.12,
-                    obstacle: 0.06
+                    normal: 0.50,
+                    energy: 0.12,
+                    chaotic: 0.10,
+                    orderly: 0.10,
+                    obstacle: 0.05,
+                    mountain: 0.07,
+                    water: 0.06
                 };
                 break;
                 
             case 'late':
                 // More special tiles, fewer normal tiles
                 probabilities = {
-                    normal: 0.4,
-                    energy: 0.15,
-                    chaotic: 0.17,
-                    orderly: 0.17,
-                    obstacle: 0.11
+                    normal: 0.35,
+                    energy: 0.12,
+                    chaotic: 0.15,
+                    orderly: 0.15,
+                    obstacle: 0.08,
+                    mountain: 0.08,
+                    water: 0.07
                 };
                 break;
         }

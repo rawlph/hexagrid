@@ -24,12 +24,12 @@ export class TileComponent extends Component {
         this.explored = false;
         this.element = null;
         
-        // Action costs for this tile
+        // Action costs for this tile - increasing base costs to make reduction traits meaningful
         this.actionCosts = {
-            move: 1,
-            sense: 1,
-            interact: 1,
-            stabilize: 1
+            move: 2,     // Increased from 1
+            sense: 2,    // Increased from 1
+            interact: 3, // Increased from 1
+            stabilize: 2 // Increased from 1
         };
         
         // Special properties based on tile type
@@ -109,10 +109,10 @@ export class TileComponent extends Component {
         
         // Reset action costs
         this.actionCosts = {
-            move: 1,
-            sense: 1,
-            interact: 1,
-            stabilize: 1
+            move: 2,     // Increased from 1
+            sense: 2,    // Increased from 1
+            interact: 3, // Increased from 1
+            stabilize: 2 // Increased from 1
         };
         
         // Reset special properties
@@ -143,25 +143,27 @@ export class TileComponent extends Component {
     initializeByType() {
         switch (this.type) {
             case 'normal':
-                this.actionCosts.move = 1;
-                this.actionCosts.interact = 2;
+                this.actionCosts.move = 2;    // Standard move cost
+                this.actionCosts.interact = 3; // Standard interact cost
                 break;
                 
             case 'energy':
                 this.energyValue = Math.floor(Math.random() * 3) + 1;
-                this.actionCosts.interact = 1;
+                this.actionCosts.interact = 2; // Easier to interact with energy tiles
                 break;
                 
             case 'chaotic':
                 this.chaos = Math.min(this.chaos + 0.2, 1);
                 this.order = 1 - this.chaos;
                 this.interactEffect = 0.2;
+                this.actionCosts.stabilize = 3; // More difficult to stabilize chaotic tiles
                 break;
                 
             case 'orderly':
                 this.chaos = Math.max(this.chaos - 0.2, 0);
                 this.order = 1 - this.chaos;
                 this.interactEffect = -0.2;
+                this.actionCosts.interact = 2; // Easier to interact with orderly tiles
                 break;
                 
             case 'obstacle':
@@ -170,13 +172,13 @@ export class TileComponent extends Component {
                 break;
                 
             case 'mountain':
-                this.actionCosts.move = 3; // More difficult to move through mountains
-                this.actionCosts.interact = 2;
+                this.actionCosts.move = 4;    // More difficult to move through mountains
+                this.actionCosts.interact = 3; // Standard interact cost
                 break;
                 
             case 'water':
-                this.actionCosts.move = 4; // Very difficult to move through water without adaptation
-                this.actionCosts.interact = 3;
+                this.actionCosts.move = 5;    // Very difficult to move through water without adaptation
+                this.actionCosts.interact = 4; // More difficult to interact in water
                 break;
         }
         
