@@ -143,12 +143,9 @@ export class Grid {
         // Spatial hash for efficient position queries
         this.spatialHash = new SpatialHash(1);
         
-        // System balance
-        this.systemChaos = 0.5;
-        this.systemOrder = 0.5;
-        
-        // Set initial balance based on game stage
-        this.setGameStageBalance(gameStage);
+        // System balance - will be initialized during init()
+        this.systemChaos = 0;
+        this.systemOrder = 0;
         
         // Bind methods
         this.handleResize = this.handleResize.bind(this);
@@ -172,7 +169,7 @@ export class Grid {
                 this.gridElement.innerHTML = '';
             }
             
-            // Set the initial balance based on game stage
+            // Set the initial balance based on game stage - SINGLE point of initialization
             this.setGameStageBalance(this.gameStage);
             
             // Generate tiles
@@ -192,19 +189,9 @@ export class Grid {
                     rows: this.rows,
                     cols: this.cols,
                     gameStage: this.gameStage,
-                    isStandardized: true
-                }
-            );
-            
-            // Emit the initial balance state
-            eventSystem.emitStandardized(
-                EventTypes.SYSTEM_BALANCE_CHANGED.legacy,
-                EventTypes.SYSTEM_BALANCE_CHANGED.standard,
-                {
-                    chaos: this.systemChaos,
-                    order: this.systemOrder,
                     systemChaos: this.systemChaos,
-                    systemOrder: this.systemOrder
+                    systemOrder: this.systemOrder,
+                    isStandardized: true
                 }
             );
             
@@ -639,23 +626,23 @@ export class Grid {
             }
         }
         
-        // Emit change event with consistent property names
-        eventSystem.emitStandardized(
-            EventTypes.SYSTEM_BALANCE_CHANGED.legacy,
-            EventTypes.SYSTEM_BALANCE_CHANGED.standard,
-            {
-                oldChaos,
-                oldOrder,
-                systemChaos: this.systemChaos,
-                systemOrder: this.systemOrder,
-                chaosDelta,
-                // Include source action if provided
-                sourceAction,
-                // Include simple property names for consistency
-                chaos: this.systemChaos,
-                order: this.systemOrder
-            }
-        );
+        // Only emit the event if this is not part of a transaction (sourceAction is null)
+        // This prevents duplicate events when actions are handled through EventMediator
+        if (!sourceAction) {
+            eventSystem.emitStandardized(
+                EventTypes.SYSTEM_BALANCE_CHANGED.legacy,
+                EventTypes.SYSTEM_BALANCE_CHANGED.standard,
+                {
+                    oldChaos,
+                    oldOrder,
+                    systemChaos: this.systemChaos,
+                    systemOrder: this.systemOrder,
+                    chaosDelta,
+                    chaos: this.systemChaos,
+                    order: this.systemOrder
+                }
+            );
+        }
         
         return this.getSystemBalance();
     }

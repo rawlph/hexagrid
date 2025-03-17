@@ -562,9 +562,9 @@ main {
 /* Feedback message */
 #feedback-message {
     position: absolute;
-    bottom: 200px; /* Keep the same vertical distance */
-    left: 50%; /* Center based on 50% of container width */
-    transform: translateX(-50%) translateX(-300px); /* Center the element and shift 300px to the left */
+    bottom: 200px;
+    left: 50%;
+    transform: translateX(-50%);
     background-color: var(--dark-color);
     color: var(--light-color);
     padding: 0.75rem 1.5rem;
@@ -572,7 +572,7 @@ main {
     font-size: 1.1rem;
     font-weight: bold;
     box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
-    z-index: 100; /* Higher than grid elements but lower than modals */
+    z-index: 100;
     pointer-events: none;
     opacity: 0;
     transition: opacity 0.3s, transform 0.3s, max-height 0.3s, padding 0.3s, font-size 0.3s;

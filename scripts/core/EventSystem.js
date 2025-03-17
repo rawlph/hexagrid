@@ -2,6 +2,8 @@
  * Event System for Hexgrid Evolution
  * Provides pub/sub event system for game components
  */
+import { EventTypes } from './EventTypes.js';
+
 export class EventSystem {
     constructor() {
         // Event listeners by event type
@@ -19,31 +21,39 @@ export class EventSystem {
         // Debug mode for logging events
         this.debugMode = false;
         
-        // Tracking for migration progress
-        this.legacyEventUsage = {};
-        this.standardEventUsage = {};
+        // Consolidated event statistics
+        this.eventStats = {
+            usage: {
+                legacy: {},
+                standard: {}
+            },
+            listeners: {
+                legacy: {},
+                standard: {}
+            }
+        };
         
         // Deprecation settings
         this.showDeprecationWarnings = true;
         this.deprecationWarningCount = 0;
-        this.maxDeprecationWarnings = 100; // Limit console spam
+        this.maxDeprecationWarnings = 100;
         
         // Migration control
-        this.disableLegacyEvents = false; // Master switch to disable all legacy events
-        this.disabledLegacyEventTypes = new Set(); // Specific legacy events to disable
-        this.fullyMigratedEvents = new Set([
-            // Mark action complete events as fully migrated
-            'moveComplete',
-            'senseComplete',
-            'interactComplete', 
-            'stabilizeComplete'
-        ]); // Events that have been fully migrated
+        this.disableLegacyEvents = false;
+        this.disabledLegacyEventTypes = new Set();
         
-        // Listener statistics for migration tracking
-        this.listenerStatistics = {
-            standardListeners: {},
-            legacyListeners: {}
-        };
+        // Initialize with empty set first, then update in next tick to avoid circular dependencies
+        this.fullyMigratedEvents = new Set();
+        
+        // Deprecation warning tracker
+        this._deprecationWarningTracker = {};
+        
+        // Initialize fully migrated events in next tick to avoid circular dependencies
+        setTimeout(() => {
+            if (EventTypes && EventTypes.FULLY_MIGRATED_EVENTS) {
+                this.fullyMigratedEvents = new Set(EventTypes.FULLY_MIGRATED_EVENTS);
+            }
+        }, 0);
     }
     
     /**
@@ -54,40 +64,20 @@ export class EventSystem {
      * @returns {Object} Registration object for removing listener
      */
     on(eventType, callback, context = null) {
-        // Initialize listeners array for this event type if needed
         if (!this.listeners[eventType]) {
             this.listeners[eventType] = [];
         }
         
-        // Create listener object
-        const listener = {
-            callback,
-            context
-        };
-        
-        // Add to listeners
+        const listener = { callback, context };
         this.listeners[eventType].push(listener);
         
-        // Create registration for removal
-        const registration = {
-            eventType,
-            callback,
-            context
-        };
-        
-        // Store registration
+        const registration = { eventType, callback, context };
         this.registrations.push(registration);
         
-        // Additional tracking for migration
-        if (eventType.includes(':')) {
-            // This is a standardized event listener
-            this.listenerStatistics.standardListeners[eventType] = 
-                (this.listenerStatistics.standardListeners[eventType] || 0) + 1;
-        } else {
-            // This is a legacy event listener
-            this.listenerStatistics.legacyListeners[eventType] = 
-                (this.listenerStatistics.legacyListeners[eventType] || 0) + 1;
-        }
+        // Update listener statistics
+        const statsKey = eventType.includes(':') ? 'standard' : 'legacy';
+        this.eventStats.listeners[statsKey][eventType] = 
+            (this.eventStats.listeners[statsKey][eventType] || 0) + 1;
         
         return registration;
     }
@@ -102,19 +92,15 @@ export class EventSystem {
         
         const { eventType, callback, context } = registration;
         
-        // Check if we have listeners for this event type
         if (!this.listeners[eventType]) return false;
         
-        // Find and remove listener
         const index = this.listeners[eventType].findIndex(listener => 
             listener.callback === callback && listener.context === context
         );
         
         if (index !== -1) {
-            // Remove listener
             this.listeners[eventType].splice(index, 1);
             
-            // Remove registration
             const regIndex = this.registrations.findIndex(reg => 
                 reg.eventType === eventType && 
                 reg.callback === callback && 
@@ -125,16 +111,10 @@ export class EventSystem {
                 this.registrations.splice(regIndex, 1);
             }
             
-            // Update tracking for migration
-            if (eventType.includes(':')) {
-                // This was a standardized event listener
-                this.listenerStatistics.standardListeners[eventType] = 
-                    Math.max(0, (this.listenerStatistics.standardListeners[eventType] || 1) - 1);
-            } else {
-                // This was a legacy event listener
-                this.listenerStatistics.legacyListeners[eventType] = 
-                    Math.max(0, (this.listenerStatistics.legacyListeners[eventType] || 1) - 1);
-            }
+            // Update listener statistics
+            const statsKey = eventType.includes(':') ? 'standard' : 'legacy';
+            this.eventStats.listeners[statsKey][eventType] = 
+                Math.max(0, (this.eventStats.listeners[statsKey][eventType] || 1) - 1);
             
             return true;
         }
@@ -179,31 +159,27 @@ export class EventSystem {
      * @param {Object} data - Data to pass to listeners
      */
     emit(eventType, data = {}) {
-        // Add timestamp to data
-        data.timestamp = Date.now();
+        // Add timestamp and standardization flag
+        const enrichedData = {
+            ...data,
+            timestamp: Date.now(),
+            isStandardized: eventType.includes(':')
+        };
         
-        // Add standardization flag
-        data.isStandardized = eventType.includes(':');
+        // Update usage statistics
+        const statsKey = enrichedData.isStandardized ? 'standard' : 'legacy';
+        this.eventStats.usage[statsKey][eventType] = 
+            (this.eventStats.usage[statsKey][eventType] || 0) + 1;
         
-        // Track usage for migration metrics
-        if (eventType.includes(':')) {
-            this.standardEventUsage[eventType] = (this.standardEventUsage[eventType] || 0) + 1;
-        } else {
-            this.legacyEventUsage[eventType] = (this.legacyEventUsage[eventType] || 0) + 1;
-        }
-        
-        // Debug logging
         if (this.debugMode) {
-            console.log(`[EventSystem] Emit: ${eventType}`, data);
+            console.log(`[EventSystem] Emit: ${eventType}`, enrichedData);
         }
         
-        // Queue event for processing
         this.eventQueue.push({
             eventType,
-            data
+            data: enrichedData
         });
         
-        // Process queue if not already processing
         if (!this.isProcessing) {
             this.processEventQueue();
         }
@@ -248,8 +224,8 @@ export class EventSystem {
                 warningMsg += ' (Legacy emission DISABLED)';
             } else {
                 // Get listener stats if available
-                const legacyListenerCount = this.listenerStatistics.legacyListeners[legacyType] || 0;
-                const standardListenerCount = this.listenerStatistics.standardListeners[standardType] || 0;
+                const legacyListenerCount = this.eventStats.listeners.legacy[legacyType] || 0;
+                const standardListenerCount = this.eventStats.listeners.standard[standardType] || 0;
                 
                 if (legacyListenerCount > 0) {
                     warningMsg += ` (${legacyListenerCount} legacy listeners still active)`;
@@ -385,43 +361,38 @@ export class EventSystem {
      * @returns {Object} Statistics about event usage and listeners
      */
     getMigrationStats() {
-        const totalLegacyEvents = Object.values(this.legacyEventUsage).reduce((sum, count) => sum + count, 0);
-        const totalStandardEvents = Object.values(this.standardEventUsage).reduce((sum, count) => sum + count, 0);
+        const stats = this.eventStats;
         
-        // Calculate standardization percentage
+        const totalLegacyEvents = Object.values(stats.usage.legacy)
+            .reduce((sum, count) => sum + count, 0);
+            
+        const totalStandardEvents = Object.values(stats.usage.standard)
+            .reduce((sum, count) => sum + count, 0);
+            
         const totalEvents = totalLegacyEvents + totalStandardEvents;
         const standardizationPercentage = totalEvents === 0 ? 0 : 
             Math.round((totalStandardEvents / totalEvents) * 100);
             
-        // Get count of fully migrated events
-        const fullyMigratedCount = this.fullyMigratedEvents.size;
-        
-        // Calculate listener migration progress
-        const totalLegacyListeners = Object.values(this.listenerStatistics.legacyListeners)
+        const totalLegacyListeners = Object.values(stats.listeners.legacy)
             .reduce((sum, count) => sum + count, 0);
             
-        const totalStandardListeners = Object.values(this.listenerStatistics.standardListeners)
+        const totalStandardListeners = Object.values(stats.listeners.standard)
             .reduce((sum, count) => sum + count, 0);
-            
-        const totalListeners = totalLegacyListeners + totalStandardListeners;
-        
-        const listenerMigrationPercentage = totalListeners === 0 ? 0 : 
-            Math.round((totalStandardListeners / totalListeners) * 100);
             
         return {
-            legacyEventCount: Object.keys(this.legacyEventUsage).length,
-            standardizedEventCount: Object.keys(this.standardEventUsage).length,
-            legacyEventUsage: this.legacyEventUsage,
-            standardizedEventUsage: this.standardEventUsage,
+            legacyEventCount: Object.keys(stats.usage.legacy).length,
+            standardizedEventCount: Object.keys(stats.usage.standard).length,
+            legacyEventUsage: stats.usage.legacy,
+            standardizedEventUsage: stats.usage.standard,
             totalLegacyEvents,
             totalStandardEvents,
             standardizationPercentage,
-            listenerStatistics: this.listenerStatistics,
+            listenerStatistics: stats.listeners,
             totalLegacyListeners,
             totalStandardListeners,
-            listenerMigrationPercentage,
+            listenerMigrationPercentage: totalLegacyListeners + totalStandardListeners === 0 ? 0 :
+                Math.round((totalStandardListeners / (totalLegacyListeners + totalStandardListeners)) * 100),
             fullyMigratedEvents: Array.from(this.fullyMigratedEvents),
-            fullyMigratedCount,
             disabledLegacyEvents: Array.from(this.disabledLegacyEventTypes)
         };
     }
@@ -528,7 +499,7 @@ export class EventSystem {
      * @returns {Array} Legacy events sorted by usage count (descending)
      */
     getLegacyEventUsageRanking() {
-        const sorted = Object.entries(this.legacyEventUsage)
+        const sorted = Object.entries(this.eventStats.usage.legacy)
             .sort((a, b) => b[1] - a[1])
             .map(([eventName, count]) => {
                 return {
@@ -540,6 +511,82 @@ export class EventSystem {
             });
         
         return sorted;
+    }
+    
+    /**
+     * Check if an event type is ready for migration
+     * An event is ready when:
+     * 1. It has no legacy listeners
+     * 2. It has at least one standard listener
+     * 3. It has been emitted at least once in standard format
+     * 4. It is not already in FULLY_MIGRATED_EVENTS
+     * @param {string} legacyType - Legacy event name
+     * @param {string} standardType - Standardized event name
+     * @returns {Object} Object containing readiness status and analysis
+     */
+    checkEventMigrationReadiness(legacyType, standardType) {
+        // Get current statistics
+        const legacyListeners = this.eventStats.listeners.legacy[legacyType] || 0;
+        const standardListeners = this.eventStats.listeners.standard[standardType] || 0;
+        const legacyUsage = this.eventStats.usage.legacy[legacyType] || 0;
+        const standardUsage = this.eventStats.usage.standard[standardType] || 0;
+        
+        // Check if already fully migrated
+        const isAlreadyMigrated = this.fullyMigratedEvents.has(legacyType);
+        
+        // Calculate readiness
+        const hasNoLegacyListeners = legacyListeners === 0;
+        const hasStandardListeners = standardListeners > 0;
+        const hasStandardUsage = standardUsage > 0;
+        
+        const isReady = !isAlreadyMigrated && 
+                       hasNoLegacyListeners && 
+                       hasStandardListeners && 
+                       hasStandardUsage;
+        
+        // Return detailed analysis
+        return {
+            isReady,
+            analysis: {
+                legacyListeners,
+                standardListeners,
+                legacyUsage,
+                standardUsage,
+                isAlreadyMigrated,
+                hasNoLegacyListeners,
+                hasStandardListeners,
+                hasStandardUsage,
+                blockers: {
+                    hasLegacyListeners: legacyListeners > 0,
+                    noStandardListeners: standardListeners === 0,
+                    noStandardUsage: standardUsage === 0,
+                    alreadyMigrated: isAlreadyMigrated
+                }
+            }
+        };
+    }
+    
+    /**
+     * Get a list of all events that are ready for migration
+     * @returns {Array} Array of objects containing event info and analysis
+     */
+    getEventsMigrationStatus() {
+        const results = [];
+        
+        // Check each event type defined in EventTypes
+        for (const [key, mapping] of Object.entries(EventTypes)) {
+            const { legacy, standard } = mapping;
+            const readiness = this.checkEventMigrationReadiness(legacy, standard);
+            
+            results.push({
+                eventKey: key,
+                legacyName: legacy,
+                standardName: standard,
+                ...readiness
+            });
+        }
+        
+        return results;
     }
 }
 

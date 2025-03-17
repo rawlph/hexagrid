@@ -289,6 +289,17 @@ export const EventTypes = {
 };
 
 /**
+ * List of events that have been fully migrated to the standardized format
+ * These events will no longer emit legacy versions
+ */
+export const FULLY_MIGRATED_EVENTS = [
+    'moveComplete',
+    'senseComplete',
+    'interactComplete',
+    'stabilizeComplete'
+];
+
+/**
  * Helper method to get all event types of a specific category
  * @param {string} category - Category prefix (e.g., 'action', 'player')
  * @returns {Array} Array of event types in that category

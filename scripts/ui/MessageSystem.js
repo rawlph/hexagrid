@@ -123,20 +123,29 @@ class MessageSystem {
         // Add a listener for system balance changes to log significant shifts
         this._registeredEvents.push(
             eventSystem.on(EventTypes.SYSTEM_BALANCE_CHANGED.standard, data => {
-                // Skip logging minor balance changes to avoid spam
-                // Also, since ActionPanel now includes balance info in stabilize feedback,
-                // we don't need to log balance changes caused by stabilize actions here
+                // Skip if this is part of a transaction (handled by ActionPanel)
+                if (data.sourceAction) {
+                    return;
+                }
                 
-                // Only log significant balance changes not from stabilize actions
-                if (Math.abs(data.chaosDelta) > 0.01 && data.sourceAction !== 'stabilize') {
+                // Only log significant balance changes (>= 1%)
+                if (Math.abs(data.chaosDelta) >= 0.01) {
                     const chaosPercent = Math.round(data.chaos * 100);
                     const orderPercent = Math.round(data.order * 100);
-                    const changeDirection = data.chaosDelta > 0 ? "increased" : "decreased";
-                    const changeAmount = Math.abs(Math.round(data.chaosDelta * 100));
                     
-                    if (changeAmount >= 1) { // Only log changes of at least 1%
-                        this.addLogMessage(`World balance ${changeDirection} to ${chaosPercent}% Chaos / ${orderPercent}% Order`, "system");
+                    // Format message based on change magnitude
+                    let message;
+                    if (Math.abs(data.chaosDelta) >= 0.05) {
+                        // For large changes (>= 5%), include the change amount
+                        const changeDirection = data.chaosDelta > 0 ? "increased" : "decreased";
+                        const changeAmount = Math.abs(Math.round(data.chaosDelta * 100));
+                        message = `World balance ${changeDirection} by ${changeAmount}% (${chaosPercent}% Chaos / ${orderPercent}% Order)`;
+                    } else {
+                        // For smaller changes, just show the new balance
+                        message = `World balance shifted to ${chaosPercent}% Chaos / ${orderPercent}% Order`;
                     }
+                    
+                    this.addLogMessage(message, "system");
                 }
             })
         );
@@ -304,8 +313,38 @@ class MessageSystem {
             }
         }
         
+        // Check for similar messages in rapid succession (within 1 second)
+        const similarMessageIndex = this.feedbackQueue.findIndex(msg => {
+            const isSimilarType = msg.type === type;
+            const isRecentEnough = (Date.now() - msg.timestamp) < 1000;
+            const isSimilarMessage = this._calculateMessageSimilarity(msg.message, message) > 0.7;
+            return isSimilarType && isRecentEnough && isSimilarMessage;
+        });
+        
+        if (similarMessageIndex >= 0) {
+            // Combine the messages
+            const existingMsg = this.feedbackQueue[similarMessageIndex];
+            const count = existingMsg.count || 1;
+            
+            // Update the existing message to show the count
+            this.feedbackQueue[similarMessageIndex] = {
+                ...newMessage,
+                message: this._formatCoalescedMessage(message, count + 1),
+                count: count + 1,
+                duration: Math.max(duration, existingMsg.duration) // Keep the longer duration
+            };
+            
+            // If we're updating the current message, refresh the display
+            if (similarMessageIndex === 0 && this.feedbackActive) {
+                clearTimeout(this._feedbackTimeout);
+                this.showCurrentMessage(this.feedbackQueue[0]);
+            }
+            
+            return;
+        }
+        
         // Basic queue management - limit queue size to prevent message backlog during fast gameplay
-        const maxQueueSize = 5; // Adjust as needed
+        const maxQueueSize = 5;
         if (this.feedbackQueue.length >= maxQueueSize) {
             // Only keep important messages (errors, warnings) and the most recent ones
             this.feedbackQueue = this.feedbackQueue.filter(msg => 
@@ -317,7 +356,6 @@ class MessageSystem {
             
             // If still too many, remove the oldest non-critical ones
             if (this.feedbackQueue.length >= maxQueueSize) {
-                // Find the oldest non-critical message
                 const oldestIndex = this.feedbackQueue.findIndex(msg => 
                     msg.type !== 'error' && 
                     msg.type !== 'warning' && 
@@ -337,6 +375,51 @@ class MessageSystem {
         if (!this.feedbackActive) {
             this.processFeedbackQueue();
         }
+    }
+    
+    /**
+     * Calculate similarity between two messages
+     * @param {string} msg1 - First message
+     * @param {string} msg2 - Second message
+     * @returns {number} Similarity score between 0 and 1
+     * @private
+     */
+    _calculateMessageSimilarity(msg1, msg2) {
+        // Remove HTML tags for comparison
+        const clean1 = msg1.replace(/<[^>]*>/g, '');
+        const clean2 = msg2.replace(/<[^>]*>/g, '');
+        
+        // If messages are identical, return 1
+        if (clean1 === clean2) return 1;
+        
+        // Split into words and compare
+        const words1 = clean1.toLowerCase().split(/\s+/);
+        const words2 = clean2.toLowerCase().split(/\s+/);
+        
+        // Count matching words
+        const matches = words1.filter(word => words2.includes(word));
+        
+        // Calculate similarity score
+        return matches.length / Math.max(words1.length, words2.length);
+    }
+    
+    /**
+     * Format a message with count for coalesced messages
+     * @param {string} message - Original message
+     * @param {number} count - Number of occurrences
+     * @returns {string} Formatted message
+     * @private
+     */
+    _formatCoalescedMessage(message, count) {
+        if (count <= 1) return message;
+        
+        // For HTML messages, add count before the closing tag of the first element
+        if (message.includes('<')) {
+            return message.replace('>', `> (×${count})`);
+        }
+        
+        // For plain text, append the count
+        return `${message} (×${count})`;
     }
     
     /**
