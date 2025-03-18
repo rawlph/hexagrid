@@ -169,31 +169,81 @@ export class Grid {
                 this.gridElement.innerHTML = '';
             }
             
-            // Set the initial balance based on game stage - SINGLE point of initialization
-            this.setGameStageBalance(this.gameStage);
+            // Create floating particles for deep-sea effect
+            this.createFloatingParticles();
             
-            // Generate tiles
-            this.generateTiles();
-            
-            // Adjust grid layout based on container size
-            this.adjustGridLayout();
-            
-            // Add window resize listener
+            // Set up resize handler
             window.addEventListener('resize', this.handleResize);
             
-            // Emit grid initialized event
-            eventSystem.emitStandardized(
-                EventTypes.GRID_INITIALIZED.legacy,
-                EventTypes.GRID_INITIALIZED.standard,
-                {
-                    rows: this.rows,
-                    cols: this.cols,
-                    gameStage: this.gameStage,
-                    systemChaos: this.systemChaos,
-                    systemOrder: this.systemOrder,
-                    isStandardized: true
+            // Set the initial balance based on game stage
+            this.setGameStageBalance(this.gameStage);
+            
+            // Get tile probabilities based on game stage
+            const tileProbabilities = this.getTileProbabilities();
+            
+            // Get dimensions from CSS variables to ensure consistency
+            const computedStyle = getComputedStyle(document.documentElement);
+            const hexWidth = parseInt(computedStyle.getPropertyValue('--tile-size') || '80', 10);
+            const hexHeightRatio = parseFloat(computedStyle.getPropertyValue('--tile-height-ratio') || '1.15');
+            const hexHeight = hexWidth * hexHeightRatio;
+            
+            // Calculate proper spacing for a honeycomb pattern
+            const horizSpacing = hexWidth * 1.00;
+            const vertSpacing = hexHeight * 0.74;
+            
+            // Calculate total width and height of the grid
+            const totalWidth = this.cols * horizSpacing + (hexWidth / 4);
+            const totalHeight = (this.rows * vertSpacing) + (hexHeight / 2);
+            
+            // Set grid dimensions and center it
+            this.gridElement.style.width = `${totalWidth}px`;
+            this.gridElement.style.height = `${totalHeight}px`;
+            this.gridElement.style.position = 'absolute';
+            this.gridElement.style.left = '50%';
+            this.gridElement.style.top = '50%';
+            this.gridElement.style.transform = 'translate(-50%, -50%)';
+            
+            console.log(`Creating interlocking hex grid with dimensions: ${totalWidth}px x ${totalHeight}px`);
+            
+            // Create tiles with absolute positioning
+            for (let row = 0; row < this.rows; row++) {
+                for (let col = 0; col < this.cols; col++) {
+                    // Calculate hex position with proper offset for odd rows
+                    let xPos = col * horizSpacing;
+                    let yPos = row * vertSpacing;
+                    
+                    // Offset odd rows to create interlocking pattern
+                    if (row % 2 === 1) {
+                        xPos += horizSpacing / 2;
+                    }
+                    
+                    // Create visual hex cell
+                    const hexCell = this.createHexCell(row, col);
+                    hexCell.style.left = `${xPos}px`;
+                    hexCell.style.top = `${yPos}px`;
+                    hexCell.style.position = 'absolute';
+                    
+                    // Create entity for this position with the appropriate component
+                    const tileEntity = this.createTileEntity(row, col, hexCell, tileProbabilities);
+                    
+                    // Store reference to tile entity
+                    this.tiles[row][col] = tileEntity;
+                    
+                    // Set up event handling for this cell
+                    this.setupHexCellEvents(hexCell, row, col, tileEntity);
                 }
-            );
+            }
+            
+            // Emit grid initialized event
+            eventSystem.emit(EventTypes.GRID_INITIALIZED.standard, {
+                rows: this.rows,
+                cols: this.cols,
+                width: totalWidth,
+                height: totalHeight,
+                gameStage: this.gameStage,
+                systemChaos: this.systemChaos,
+                systemOrder: this.systemOrder
+            });
             
             console.log(`Grid initialized with ${this.rows}x${this.cols} tiles`);
             return true;
@@ -231,104 +281,6 @@ export class Grid {
         }
         
         console.log(`Grid: Set initial balance for ${gameStage} stage - Chaos: ${this.systemChaos.toFixed(2)}, Order: ${this.systemOrder.toFixed(2)}`);
-    }
-    
-    /**
-     * Initialize the grid and create tiles
-     */
-    initializeGrid() {
-        console.log(`Initializing grid with ${this.rows} rows and ${this.cols} columns`);
-        
-        // Clear any existing grid
-        if (this.gridElement) {
-            this.gridElement.remove();
-        }
-        
-        // Create grid element
-        this.gridElement = document.createElement('div');
-        this.gridElement.className = 'hex-grid';
-        this.container.appendChild(this.gridElement);
-        
-        // Create floating particles for deep-sea effect
-        this.createFloatingParticles();
-        
-        // Set up resize handler
-        window.addEventListener('resize', this.handleResize);
-        
-        // Get tile probabilities based on game stage
-        const tileProbabilities = this.getTileProbabilities();
-        
-        // Hex dimensions and spacing
-        // Get dimensions from CSS variables to ensure consistency
-        const computedStyle = getComputedStyle(document.documentElement);
-        const hexWidth = parseInt(computedStyle.getPropertyValue('--tile-size') || '80', 10);
-        const hexHeightRatio = parseFloat(computedStyle.getPropertyValue('--tile-height-ratio') || '1.15');
-        const hexHeight = hexWidth * hexHeightRatio;
-        
-        // Calculate proper spacing for a honeycomb pattern
-        // For pointy-top hexagons:
-        // - Horizontal spacing: Slightly more than 3/4 of the width to prevent overlap
-        // - Vertical spacing: Slightly less than Height * 0.865 to reduce gap between rows
-        const horizSpacing = hexWidth * 1.00; // Increase from 0.75 to prevent overlap
-        const vertSpacing = hexHeight * 0.74; // Decrease from 0.865 to reduce gap between rows
-        
-        // Calculate total width and height of the grid
-        const totalWidth = this.cols * horizSpacing + (hexWidth / 4);
-        const totalHeight = (this.rows * vertSpacing) + (hexHeight / 2);
-        
-        // Set grid dimensions and center it
-        this.gridElement.style.width = `${totalWidth}px`;
-        this.gridElement.style.height = `${totalHeight}px`;
-        this.gridElement.style.position = 'absolute';
-        this.gridElement.style.left = '50%';
-        this.gridElement.style.top = '50%';
-        this.gridElement.style.transform = 'translate(-50%, -50%)';
-        
-        console.log(`Creating interlocking hex grid with dimensions: ${totalWidth}px x ${totalHeight}px`);
-        
-        // Create tiles with absolute positioning
-        for (let row = 0; row < this.rows; row++) {
-            for (let col = 0; col < this.cols; col++) {
-                // Calculate hex position with proper offset for odd rows
-                let xPos = col * horizSpacing;
-                let yPos = row * vertSpacing;
-                
-                // Offset odd rows to create interlocking pattern
-                if (row % 2 === 1) {
-                    xPos += horizSpacing / 2;
-                }
-                
-                console.log(`Creating tile at row=${row}, col=${col}, x=${xPos}, y=${yPos}`);
-                
-                // Create visual hex cell
-                const hexCell = this.createHexCell(row, col);
-                hexCell.style.left = `${xPos}px`;
-                hexCell.style.top = `${yPos}px`;
-                hexCell.style.position = 'absolute';
-                
-                // Create entity for this position with the appropriate component
-                const tileEntity = this.createTileEntity(row, col, hexCell, tileProbabilities);
-                
-                // Store reference to tile entity
-                this.tiles[row][col] = tileEntity;
-                
-                // Set up event handling for this cell
-                this.setupHexCellEvents(hexCell, row, col, tileEntity);
-            }
-        }
-        
-        // Emit grid initialized event
-        eventSystem.emitStandardized(
-            EventTypes.GRID_INITIALIZED.legacy,
-            EventTypes.GRID_INITIALIZED.standard,
-            {
-                rows: this.rows,
-                cols: this.cols,
-                width: totalWidth,
-                height: totalHeight,
-                isStandardized: true
-            }
-        );
     }
     
     /**
@@ -489,17 +441,12 @@ export class Grid {
         hexCell.addEventListener('click', (e) => {
             console.log(`Tile clicked at (${row}, ${col})`);
             
-            // Emit tile clicked event using standardized event emission
-            eventSystem.emitStandardized(
-                EventTypes.TILE_CLICKED.legacy,
-                EventTypes.TILE_CLICKED.standard,
-                {
-                    row,
-                    col,
-                    tileEntity,
-                    isStandardized: true
-                }
-            );
+            // Emit tile clicked event
+            eventSystem.emit(EventTypes.TILE_CLICKED.standard, {
+                row,
+                col,
+                tileEntity
+            });
             
             // Prevent event bubbling
             e.stopPropagation();
@@ -626,23 +573,15 @@ export class Grid {
             }
         }
         
-        // Only emit the event if this is not part of a transaction (sourceAction is null)
-        // This prevents duplicate events when actions are handled through EventMediator
-        if (!sourceAction) {
-            eventSystem.emitStandardized(
-                EventTypes.SYSTEM_BALANCE_CHANGED.legacy,
-                EventTypes.SYSTEM_BALANCE_CHANGED.standard,
-                {
-                    oldChaos,
-                    oldOrder,
-                    systemChaos: this.systemChaos,
-                    systemOrder: this.systemOrder,
-                    chaosDelta,
-                    chaos: this.systemChaos,
-                    order: this.systemOrder
-                }
-            );
-        }
+        // Emit the standardized event
+        eventSystem.emit(EventTypes.SYSTEM_BALANCE_CHANGED.standard, {
+            oldChaos,
+            oldOrder,
+            systemChaos: this.systemChaos,
+            systemOrder: this.systemOrder,
+            chaosDelta,
+            sourceAction
+        });
         
         return this.getSystemBalance();
     }
@@ -700,25 +639,6 @@ export class Grid {
         
         // Clear tiles array
         this.tiles = [];
-    }
-    
-    /**
-     * Generate tiles for the grid
-     * This method delegates to initializeGrid for the actual tile generation
-     */
-    generateTiles() {
-        console.log(`Generating tiles for ${this.rows}x${this.cols} grid`);
-        return this.initializeGrid();
-    }
-    
-    /**
-     * Adjust grid layout based on container size
-     */
-    adjustGridLayout() {
-        if (!this.gridElement) return;
-        
-        // Set container size
-        this.setContainerSize();
     }
     
     /**
