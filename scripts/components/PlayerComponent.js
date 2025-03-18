@@ -676,10 +676,18 @@ export class PlayerComponent extends Component {
         // Bonus points for staying still
         const bonusPoints = Math.floor(this.consecutiveStationaryTurns / 2);
         
-        this.movementPoints = Math.min(
+        // Use maxMovementPoints as the base value for restoration
+        const restoredPoints = Math.min(
             this.maxMovementPoints,
-            this.movementPointsPerTurn + bonusPoints
+            this.maxMovementPoints + bonusPoints
         );
+        
+        // Use EventMediator to handle the movement points change
+        eventMediator.handlePlayerMovementPointsChange({
+            player: this,
+            amount: restoredPoints - this.movementPoints,
+            source: 'turn_start'
+        });
         
         // Enhanced energy restoration with efficiency
         const energyRestoration = Math.round(
