@@ -34,7 +34,7 @@ export class EventMediator {
                 'system:balance:changed',
                 'action:complete:move'
             ],
-            // New event sequences for player resource changes
+            // Player resource change sequences
             'player:energy:change': [
                 'player:resource:changed:energy',
                 'player:stats:updated'
@@ -47,6 +47,16 @@ export class EventMediator {
                 'player:evolution:points:changed',
                 'player:stats:updated',
                 'evolution:ready' // Optional event if player can evolve
+            ],
+            // Level transition sequences for evolution points
+            'player:evolution:points:save': [
+                'player:evolution:points:changed',
+                'player:stats:updated'
+            ],
+            'player:evolution:points:restore': [
+                'player:evolution:points:changed',
+                'player:stats:updated',
+                'evolution:ready' // Check if player can evolve after restoration
             ]
         };
         

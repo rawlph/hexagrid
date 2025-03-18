@@ -328,6 +328,211 @@ showFeedback(message, type = '', duration = 2000, addToLog = false, category = '
 }
 ```
 
+### Message System Enhancements
+
+The MessageSystem now includes advanced features for handling rapid gameplay and message clutter:
+
+```javascript
+class MessageSystem {
+    constructor() {
+        this.messageQueue = [];
+        this.maxQueueSize = 5;
+        this.isCompactMode = false;
+        this._lastMessageTimestamp = 0;
+        this._coalescedMessages = new Map();
+    }
+
+    showFeedbackMessage(message, duration = 2000, type = '', category = '') {
+        // Check for similar messages within 1 second
+        const now = Date.now();
+        const similarMessage = this._findSimilarMessage(message, now - 1000);
+        
+        if (similarMessage) {
+            // Coalesce similar messages
+            const count = (similarMessage.count || 1) + 1;
+            const coalescedMessage = this._formatCoalescedMessage(message, count);
+            
+            // Update existing message
+            this._updateExistingMessage(similarMessage.id, coalescedMessage, count);
+        } else {
+            // Add new message to queue
+            this._addNewMessage({
+                content: message,
+                type,
+                category,
+                timestamp: now,
+                duration: this._calculateDuration(duration)
+            });
+        }
+        
+        // Manage queue size
+        this._enforceQueueLimit();
+    }
+
+    _calculateDuration(baseDuration) {
+        // Reduce duration during rapid gameplay
+        return this.isCompactMode ? baseDuration * 0.6 : baseDuration;
+    }
+
+    _findSimilarMessage(message, timeThreshold) {
+        return this.messageQueue.find(msg => 
+            msg.timestamp > timeThreshold &&
+            this._calculateMessageSimilarity(msg.content, message) >= 0.7
+        );
+    }
+
+    _calculateMessageSimilarity(msg1, msg2) {
+        // Strip HTML and compare text content
+        const text1 = this._stripHTML(msg1);
+        const text2 = this._stripHTML(msg2);
+        
+        // Implement similarity calculation (e.g., Levenshtein distance)
+        return /* similarity score between 0 and 1 */;
+    }
+
+    _formatCoalescedMessage(message, count) {
+        const baseMessage = this._stripHTML(message);
+        return `${baseMessage} (×${count})`;
+    }
+
+    _enforceQueueLimit() {
+        while (this.messageQueue.length > this.maxQueueSize) {
+            // Remove oldest non-critical message
+            const index = this.messageQueue.findIndex(msg => msg.type !== 'critical');
+            if (index >= 0) {
+                this.messageQueue.splice(index, 1);
+            } else {
+                break;
+            }
+        }
+    }
+}
+```
+
+### UI Styling Patterns
+
+The UI follows consistent styling patterns for visual feedback and theming:
+
+```css
+/* Deep-sea theme variables */
+:root {
+    --deep-blue: #001f3f;
+    --biolum-glow: #00ff9d;
+    --ocean-gradient: linear-gradient(180deg, var(--deep-blue) 0%, #000913 100%);
+    --feedback-shadow: 0 0 15px var(--biolum-glow);
+}
+
+/* Feedback message positioning */
+#feedback-message {
+    position: absolute;
+    bottom: 200px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 1000;
+    background: rgba(0, 31, 63, 0.9);
+    border: 1px solid var(--biolum-glow);
+    box-shadow: var(--feedback-shadow);
+    padding: 10px 20px;
+    border-radius: 4px;
+    transition: opacity 0.3s ease;
+}
+
+/* Responsive design */
+@media (max-width: 768px) {
+    #feedback-message {
+        width: 90%;
+        max-width: 400px;
+    }
+}
+
+/* Animation patterns */
+.message-enter {
+    animation: slideUp 0.3s ease-out;
+}
+
+.message-exit {
+    animation: fadeOut 0.3s ease-in;
+}
+
+@keyframes slideUp {
+    from { transform: translateY(20px); opacity: 0; }
+    to { transform: translateY(0); opacity: 1; }
+}
+```
+
+### Enhanced Event System
+
+The event system now includes transaction-based handling and migration support:
+
+```javascript
+class EventSystem {
+    constructor() {
+        this.listeners = new Map();
+        this.transactionStack = [];
+        this.migrationStatus = new Map();
+    }
+
+    emitWithTransaction(eventType, data, sourceAction = null) {
+        // Start transaction
+        const transaction = {
+            id: crypto.randomUUID(),
+            sourceAction,
+            events: []
+        };
+        
+        this.transactionStack.push(transaction);
+        
+        try {
+            // Emit event
+            this.emit(eventType, {
+                ...data,
+                transactionId: transaction.id,
+                sourceAction
+            });
+            
+            // Track for migration
+            this._updateMigrationStats(eventType, sourceAction);
+        } finally {
+            // End transaction
+            this.transactionStack.pop();
+        }
+    }
+
+    _updateMigrationStats(eventType, sourceAction) {
+        const stats = this.migrationStatus.get(eventType) || {
+            totalEmissions: 0,
+            sourceActions: new Map(),
+            lastEmission: null
+        };
+        
+        stats.totalEmissions++;
+        if (sourceAction) {
+            const actionCount = stats.sourceActions.get(sourceAction) || 0;
+            stats.sourceActions.set(sourceAction, actionCount + 1);
+        }
+        stats.lastEmission = Date.now();
+        
+        this.migrationStatus.set(eventType, stats);
+    }
+
+    checkEventMigrationReadiness(legacyType, standardType) {
+        const legacyStats = this.migrationStatus.get(legacyType);
+        const standardStats = this.migrationStatus.get(standardType);
+        
+        return {
+            isReady: this._calculateMigrationReadiness(legacyStats, standardStats),
+            analysis: {
+                legacyUsage: legacyStats?.totalEmissions || 0,
+                standardUsage: standardStats?.totalEmissions || 0,
+                commonSources: this._findCommonSources(legacyStats, standardStats)
+            }
+        };
+    }
+}
+```
+
+These enhancements maintain the codebase's principles while adding modern features for improved user experience and maintainability.
+
 ## Turn Handling
 
 The turn system manages the flow of gameplay through discrete turns.

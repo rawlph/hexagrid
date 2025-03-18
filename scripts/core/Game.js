@@ -2553,14 +2553,41 @@ export class Game {
         const playerComponent = playerEntity.getComponent(PlayerComponent);
         if (!playerComponent) return { traitIds: [], evolutionPoints: {}, acquiredTraits: {} };
         
-        // Get acquired traits from evolution system (using the property instead of creating new instance)
+        // Start a transaction for saving evolution points state
+        const transactionId = eventMediator.beginTransaction('player:evolution:points:save', {
+            source: 'level_transition',
+            stage: 'save'
+        });
+        
+        // Get acquired traits from evolution system
         const acquiredTraits = this.evolutionSystem.getAcquiredTraitsData();
         
-        // Save trait IDs instead of full trait objects to avoid serialization issues with functions
+        // Save trait IDs instead of full trait objects to avoid serialization issues
         const traitIds = playerComponent.traits.map(trait => trait.id);
         
         console.log(`Saving ${traitIds.length} traits for level transition: ${traitIds.join(', ')}`);
         
+        // Record the evolution points state in the transaction
+        eventMediator.recordEvent(transactionId, 'player:evolution:points:changed', {
+            player: playerComponent,
+            chaosPoints: playerComponent.chaosEvolutionPoints,
+            flowPoints: playerComponent.flowEvolutionPoints,
+            orderPoints: playerComponent.orderEvolutionPoints,
+            totalPoints: playerComponent.evolutionPoints,
+            source: 'level_transition_save'
+        });
+        
+        // Record stats update
+        eventMediator.recordEvent(transactionId, 'player:stats:updated', {
+            player: playerComponent,
+            stats: playerComponent.getStats(),
+            source: 'level_transition_save'
+        });
+        
+        // Commit the transaction
+        eventMediator.commitTransaction(transactionId);
+        
+        // Return the saved state
         return {
             traitIds: traitIds,
             evolutionPoints: {
@@ -2594,7 +2621,13 @@ export class Game {
             return;
         }
         
-        // Restore acquired traits data in evolution system (using the property)
+        // Start a transaction for restoring evolution points
+        const transactionId = eventMediator.beginTransaction('player:evolution:points:restore', {
+            source: 'level_transition',
+            stage: 'restore'
+        });
+        
+        // Restore acquired traits data in evolution system
         if (playerData.acquiredTraits) {
             this.evolutionSystem.setAcquiredTraitsData(playerData.acquiredTraits);
         }
@@ -2621,27 +2654,50 @@ export class Game {
         
         // Restore evolution points
         if (playerData.evolutionPoints) {
-            playerComponent.chaosEvolutionPoints = playerData.evolutionPoints.chaos || 0;
-            playerComponent.flowEvolutionPoints = playerData.evolutionPoints.flow || 0;
-            playerComponent.orderEvolutionPoints = playerData.evolutionPoints.order || 0;
-            playerComponent.evolutionPoints = playerData.evolutionPoints.total || 0;
-            
-            // Emit event to update UI
-            this.eventSystem.emitStandardized(
-                EventTypes.PLAYER_EVOLUTION_POINTS_CHANGED.legacy,
-                EventTypes.PLAYER_EVOLUTION_POINTS_CHANGED.standard,
-                {
-                    player: playerComponent,
-                    chaosPoints: playerComponent.chaosEvolutionPoints,
-                    flowPoints: playerComponent.flowEvolutionPoints,
-                    orderPoints: playerComponent.orderEvolutionPoints,
-                    totalPoints: playerComponent.evolutionPoints,
-                    isStandardized: true
-                }
+            // Update the component through its private methods
+            playerComponent._updateEvolutionPointsDirect(
+                playerData.evolutionPoints.chaos,
+                playerData.evolutionPoints.flow,
+                playerData.evolutionPoints.order,
+                playerData.evolutionPoints.total
             );
+            
+            // Record the evolution points change event
+            eventMediator.recordEvent(transactionId, 'player:evolution:points:changed', {
+                player: playerComponent,
+                chaosPoints: playerComponent.chaosEvolutionPoints,
+                flowPoints: playerComponent.flowEvolutionPoints,
+                orderPoints: playerComponent.orderEvolutionPoints,
+                totalPoints: playerComponent.evolutionPoints,
+                source: 'level_transition_restore'
+            });
+            
+            // Record stats update
+            eventMediator.recordEvent(transactionId, 'player:stats:updated', {
+                player: playerComponent,
+                stats: playerComponent.getStats(),
+                source: 'level_transition_restore'
+            });
+            
+            // Check if player can evolve after restoration
+            if (playerComponent.canEvolve && typeof playerComponent.canEvolve === 'function' && playerComponent.canEvolve()) {
+                eventMediator.recordEvent(transactionId, 'evolution:ready', {
+                    player: playerComponent,
+                    evolutionPoints: {
+                        chaos: playerComponent.chaosEvolutionPoints,
+                        flow: playerComponent.flowEvolutionPoints,
+                        order: playerComponent.orderEvolutionPoints,
+                        total: playerComponent.evolutionPoints
+                    },
+                    source: 'level_transition_restore'
+                });
+            }
             
             console.log(`Restored evolution points: ${playerComponent.evolutionPoints} total`);
         }
+        
+        // Commit the transaction - this will emit events in the correct order
+        eventMediator.commitTransaction(transactionId);
     }
     
     /**
@@ -2650,53 +2706,69 @@ export class Game {
      * @returns {Object} New balance parameters
      */
     calculateNextLevelBalance(data) {
-        // Get current game stage
         const currentStage = this.turnSystem?.gameStage || 'early';
         
-        // Access the metrics system for progression data
-        if (!this.metricsSystem) {
-            console.warn('Game: MetricsSystem not available, using default progression values');
-            return this._getDefaultBalanceForStage(currentStage, data.levelNumber);
-        }
-        
-        console.log('Calculating next level balance using progression formula');
-        
-        // Get metrics for the progression formula
+        // Get metrics for progression formula
         const S = this.metricsSystem.levelProgressionMetrics.stabilizedTiles;
         const E = this.metricsSystem.levelProgressionMetrics.energyGatheredFromTiles;
+        const T = this.turnSystem.turnCount;
         
         // Get current chaos value
         const currentChaos = this.metricsSystem.levelProgressionMetrics.initialChaos;
         
-        // Define constants for the chaos progression formula
+        // Enhanced constants for the chaos progression formula
         const k = 10;   // Energy scaling constant
         const alpha = 0.05;  // Main tuning factor
-        
-        // Beta varies by game stage - pull toward balance in early game only
-        let beta = 0;
-        if (currentStage === 'early') {
-            beta = 0.1;  // Pull toward 50/50 in early game
-        }
+        const beta = currentStage === 'early' ? 0.1 : 0.05; // Stage-based balance pull
+        const gamma = 0.02;  // Turn influence factor
         
         // Calculate player impact: S - E/k
         const playerImpact = S - (E / k);
         
-        // Calculate balance pull: β(0.5 - C_current)
-        const balancePull = beta * (0.5 - currentChaos);
+        // Calculate turn pressure: γ * (T/maxTurns)
+        const turnPressure = gamma * (T / this.turnSystem.maxTurns);
         
-        // Apply formula: C_next = C_current - α(S - E/k) + β(0.5 - C_current)
-        let nextChaos = currentChaos - (alpha * playerImpact) + balancePull;
+        // Calculate target chaos based on game stage
+        const targetChaos = {
+            'early': 0.5,
+            'mid': 0.4,
+            'late': 0.3
+        }[currentStage];
         
-        // Ensure chaos stays within valid range
-        nextChaos = Math.max(0, Math.min(1, nextChaos));
+        // Calculate balance pull: β(targetChaos - currentChaos)
+        const balancePull = beta * (targetChaos - currentChaos);
         
-        console.log(`Level progression formula results:
-        - Current chaos: ${currentChaos.toFixed(2)}
-        - Stabilized tiles (S): ${S}
-        - Energy gathered (E): ${E}
-        - Player impact (S - E/k): ${playerImpact.toFixed(2)}
-        - Balance pull (β(0.5 - C_current)): ${balancePull.toFixed(2)}
-        - Next level chaos: ${nextChaos.toFixed(2)}`);
+        // Enhanced formula: C_next = C_current - α(S - E/k) + β(target - C_current) + γ(T/maxTurns)
+        let nextChaos = currentChaos - (alpha * playerImpact) + balancePull + turnPressure;
+        
+        // Stage-specific bounds for chaos
+        const minChaos = {
+            'early': 0.3,
+            'mid': 0.2,
+            'late': 0.1
+        }[currentStage];
+        
+        const maxChaos = {
+            'early': 0.8,
+            'mid': 0.7,
+            'late': 0.6
+        }[currentStage];
+        
+        // Ensure chaos stays within valid range with stage-specific bounds
+        nextChaos = Math.max(minChaos, Math.min(maxChaos, nextChaos));
+        
+        // Log the calculation details for debugging
+        if (this.debugMode) {
+            console.log(`Level progression formula results:
+                - Current chaos: ${currentChaos.toFixed(2)}
+                - Stabilized tiles (S): ${S}
+                - Energy gathered (E): ${E}
+                - Turn count (T): ${T}
+                - Player impact (S - E/k): ${playerImpact.toFixed(2)}
+                - Balance pull (β(target - C_current)): ${balancePull.toFixed(2)}
+                - Turn pressure (γ(T/maxTurns)): ${turnPressure.toFixed(2)}
+                - Next level chaos: ${nextChaos.toFixed(2)}`);
+        }
         
         // Store in metrics system for future reference
         this.metricsSystem.levelProgressionMetrics.finalChaos = nextChaos;

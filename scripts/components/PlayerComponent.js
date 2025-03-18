@@ -22,27 +22,37 @@ export class PlayerComponent extends Component {
         this.row = startRow;
         this.col = startCol;
         
-        // Resources
+        // Enhanced resource management
         this.energy = 10;
         this.maxEnergy = 10;
+        this.energyEfficiency = 1.0;
+        this.energyRegenBase = 5;
+        
+        // Enhanced movement system
         this.movementPoints = 3;
         this.maxMovementPoints = 3;
+        this.movementPointsPerTurn = 3;
+        this.movementPointsAccumulated = 0;
+        this.consecutiveStationaryTurns = 0;
         
         // Evolution
-        this.evolutionPoints = 0; // Legacy total points
+        this.evolutionPoints = 0;
         this.chaosEvolutionPoints = 0;
         this.flowEvolutionPoints = 0;
         this.orderEvolutionPoints = 0;
-        this.traits = []; // Always initialize as empty array
+        this.traits = [];
         
         // Action state
         this.currentAction = null;
         
-        // Stats tracking
+        // Enhanced stats tracking
         this.tilesExplored = 0;
         this.movesMade = 0;
         this.actionsPerformed = 0;
         this.turnsCompleted = 0;
+        this.energyUsedTotal = 0;
+        this.energyRegainedTotal = 0;
+        this.movementEfficiency = 1.0;
         
         // DOM elements
         this.markerElement = null;
@@ -354,27 +364,33 @@ export class PlayerComponent extends Component {
      * @returns {boolean} Whether enough energy was available
      */
     useEnergy(amount) {
-        console.log(`PlayerComponent.useEnergy: Using ${amount} energy, current energy: ${this.energy}`);
+        if (this.energy < amount) return false;
         
-        // Check if we have enough energy
-        if (this.energy < amount) {
-            console.warn(`Not enough energy for action: have ${this.energy}, need ${amount}`);
-            return false;
-        }
+        const oldEnergy = this.energy;
         
-        // Use the EventMediator to handle the energy change transaction
-        const result = eventMediator.handlePlayerEnergyChange({
-            player: this,
-            amount: -amount,  // Negative amount for consumption
-            source: 'action'
-        });
+        // Enhanced energy consumption with efficiency
+        const actualCost = Math.round(amount * (1 - (this.traits.length * 0.05)));
+        this.energy = Math.max(0, this.energy - actualCost);
         
-        if (!result.success) {
-            console.error(`Failed to use energy: ${result.error}`);
-            return false;
-        }
+        // Track energy usage
+        this.energyUsedTotal += actualCost;
+        this.energyEfficiency = (oldEnergy - this.energy) / amount;
         
-        console.log(`Energy updated: ${result.oldEnergy} -> ${result.newEnergy} (delta: ${result.delta})`);
+        // Emit standardized energy changed event
+        eventSystem.emitStandardized(
+            EventTypes.PLAYER_ENERGY_CHANGED.legacy,
+            EventTypes.PLAYER_ENERGY_CHANGED.standard,
+            {
+                player: this,
+                oldValue: oldEnergy,
+                newValue: this.energy,
+                delta: this.energy - oldEnergy,
+                efficiency: this.energyEfficiency,
+                source: 'action',
+                isStandardized: true
+            }
+        );
+        
         return true;
     }
     
@@ -650,73 +666,57 @@ export class PlayerComponent extends Component {
      * @param {Object} data - Event data
      */
     onTurnStart(data) {
-        console.log(`Turn start event received with turn count: ${data.turnCount}`);
+        // Enhanced movement points restoration
+        if (this.movementPoints === 0) {
+            this.consecutiveStationaryTurns++;
+        } else {
+            this.consecutiveStationaryTurns = 0;
+        }
         
-        // Refresh movement points
-        const oldPoints = this.movementPoints;
-        this.movementPoints = this.maxMovementPoints;
+        // Bonus points for staying still
+        const bonusPoints = Math.floor(this.consecutiveStationaryTurns / 2);
         
-        // Emit movement points changed event - use standardized emission with deprecation info
+        this.movementPoints = Math.min(
+            this.maxMovementPoints,
+            this.movementPointsPerTurn + bonusPoints
+        );
+        
+        // Enhanced energy restoration with efficiency
+        const energyRestoration = Math.round(
+            (this.energyRegenBase + Math.min(2, this.consecutiveStationaryTurns)) * 
+            this.energyEfficiency
+        );
+        
+        this.energy = Math.min(this.maxEnergy, this.energy + energyRestoration);
+        this.energyRegainedTotal += energyRestoration;
+        
+        // Emit standardized resource change events
         eventSystem.emitStandardized(
             EventTypes.PLAYER_MOVEMENT_POINTS_CHANGED.legacy,
             EventTypes.PLAYER_MOVEMENT_POINTS_CHANGED.standard,
             {
                 player: this,
-                oldMovementPoints: oldPoints,
-                movementPoints: this.movementPoints,
-                // Include legacy properties for backward compatibility
-                oldPoints: oldPoints,
-                newPoints: this.movementPoints,
-                delta: this.movementPoints - oldPoints
-            },
-            EventTypes.PLAYER_MOVEMENT_POINTS_CHANGED.deprecation
+                oldValue: 0,
+                newValue: this.movementPoints,
+                delta: this.movementPoints,
+                source: 'turn_start',
+                isStandardized: true
+            }
         );
         
-        // Apply energy recovery - fixed to match documentation (was +2, should be +5)
-        const oldEnergy = this.energy;
-        const energyRecovery = 5; // Base recovery amount as per documentation
-        
-        // Check for energy-related traits
-        let additionalEnergy = 0;
-        if (Array.isArray(this.traits)) {
-            for (const trait of this.traits) {
-                // Skip if trait is null or undefined
-                if (!trait) continue;
-                
-                // Apply energy per turn bonus if specified in trait effects
-                if (trait.effects && trait.effects.energyPerTurn) {
-                    additionalEnergy += trait.effects.energyPerTurn;
-                    console.log(`Applied ${trait.name} trait: +${trait.effects.energyPerTurn} additional energy`);
-                }
+        eventSystem.emitStandardized(
+            EventTypes.PLAYER_ENERGY_CHANGED.legacy,
+            EventTypes.PLAYER_ENERGY_CHANGED.standard,
+            {
+                player: this,
+                oldValue: this.energy - energyRestoration,
+                newValue: this.energy,
+                delta: this.energy - energyRestoration,
+                source: 'turn_start',
+                efficiency: this.energyEfficiency,
+                isStandardized: true
             }
-        }
-        
-        this.energy = Math.min(this.maxEnergy, this.energy + energyRecovery + additionalEnergy);
-        
-        // Log energy recovery for debugging
-        console.log(`Energy recovered: ${energyRecovery} base + ${additionalEnergy} from traits = ${energyRecovery + additionalEnergy} total`);
-        
-        // Emit energy changed event if energy changed - use standardized emission with deprecation info
-        if (this.energy !== oldEnergy) {
-            eventSystem.emitStandardized(
-                EventTypes.PLAYER_ENERGY_CHANGED.legacy,
-                EventTypes.PLAYER_ENERGY_CHANGED.standard,
-                {
-                    player: this,
-                    oldEnergy: oldEnergy,
-                    energy: this.energy,
-                    // Include legacy properties for backward compatibility
-                    newEnergy: this.energy,
-                    delta: this.energy - oldEnergy,
-                    // Include specific property for metrics tracking
-                    energyRestored: energyRecovery + additionalEnergy
-                },
-                EventTypes.PLAYER_ENERGY_CHANGED.deprecation
-            );
-        }
-        
-        // Make sure marker is visible and positioned correctly
-        this.updateMarkerPosition();
+        );
     }
     
     /**
@@ -958,15 +958,21 @@ export class PlayerComponent extends Component {
         // Reset resources
         this.energy = 10;
         this.maxEnergy = 10;
+        this.energyEfficiency = 1.0;
+        this.energyRegenBase = 5;
         this.movementPoints = 3;
         this.maxMovementPoints = 3;
-        
-        // Reset evolution
+        this.movementPointsPerTurn = 3;
+        this.movementPointsAccumulated = 0;
+        this.consecutiveStationaryTurns = 0;
         this.evolutionPoints = 0;
         this.chaosEvolutionPoints = 0;
         this.flowEvolutionPoints = 0;
         this.orderEvolutionPoints = 0;
         this.traits = [];
+        this.energyUsedTotal = 0;
+        this.energyRegainedTotal = 0;
+        this.movementEfficiency = 1.0;
         
         // Reset action state
         this.currentAction = null;

@@ -190,19 +190,31 @@ export class TileComponent extends Component {
      * Update action costs based on chaos level
      */
     updateActionCosts() {
-        // High chaos increases costs
-        const chaosFactor = 1 + (this.chaos * 0.5);
+        // Enhanced chaos factor calculation using exponential scaling
+        const chaosFactor = 1 + (Math.pow(this.chaos, 1.5) * 0.8);
         
-        // Apply chaos factor to all actions except move
-        if (this.type !== 'obstacle') {
-            this.actionCosts.sense *= chaosFactor;
-            this.actionCosts.interact *= chaosFactor;
-            this.actionCosts.stabilize *= chaosFactor;
-        }
+        // Base costs by tile type - moved from initializeByType for centralization
+        const baseCosts = {
+            normal: { move: 2, sense: 2, interact: 3, stabilize: 3 },
+            energy: { move: 2, sense: 1, interact: 2, stabilize: 3 },
+            chaotic: { move: 3, sense: 3, interact: 4, stabilize: 4 },
+            orderly: { move: 2, sense: 2, interact: 2, stabilize: 2 },
+            obstacle: { move: 999, sense: 2, interact: 999, stabilize: 999 },
+            mountain: { move: 4, sense: 2, interact: 3, stabilize: 4 },
+            water: { move: 5, sense: 3, interact: 4, stabilize: 5 }
+        }[this.type] || baseCosts.normal;
         
-        // Round costs to nearest integer
+        // Apply chaos factor differently for each action type
+        this.actionCosts = {
+            move: Math.round(baseCosts.move * (1 + (this.chaos * 0.3))),
+            sense: Math.round(baseCosts.sense * (1 + (this.chaos * 0.5))),
+            interact: Math.round(baseCosts.interact * chaosFactor),
+            stabilize: Math.round(baseCosts.stabilize * (1 + (Math.pow(this.chaos, 2) * 0.7)))
+        };
+        
+        // Ensure minimum costs
         for (const action in this.actionCosts) {
-            this.actionCosts[action] = Math.max(1, Math.round(this.actionCosts[action]));
+            this.actionCosts[action] = Math.max(1, this.actionCosts[action]);
         }
     }
     
